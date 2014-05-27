@@ -37,7 +37,7 @@ using namespace std;
 #include <bam.h>
 
 #include <tktools.hxx>
-#include <seq_gene.hxx>
+//#include <seq_gene.hxx>
 #include <gtf.hxx>
 #include <snpexp.hxx>
 
