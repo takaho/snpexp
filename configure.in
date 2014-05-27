@@ -1,0 +1,31 @@
+AC_INIT(snpexp.cxx)
+AM_INIT_AUTOMAKE(snpexp,0.1.0)
+AC_PROG_CC
+#AC_CHECK_FUNCS(sleep)
+#AC_CHECK_FUNCS(usleep random snprintf getpagesize sysconf)
+#AC_CHECK_HEADERS(unistd.h stdint.h values.h limits.h stdlib.h pthread.h omp.h pcre.h fcntl.h sys/sysctl.h)
+#CPPFLAGS = `$CPPFLAGS -I.`
+#AC_CHECK_HEADERS(bam.h bgzf.h,,[AC_MSG_ERROR(no bam.h found)])
+if test -f bam.h
+then
+	AC_DEFINE(HAVE_BAM_H)
+fi
+AC_CHECK_HEADERS(zlib.h)
+AC_PROG_CXX
+AC_CHECK_SIZEOF(void*, 8)
+AC_CHECK_SIZEOF(int, 4)
+#AC_CXX_BOOL
+#AC_CXX_NAMESPACES
+#AC_CXX_EXCEPTIONS
+#AC_CXX_SSTREAM
+#AC_CXX_HAVE_NUMERIC_LIMITS
+#AC_CXX_MUTABLE
+#AC_CXX_STRSTREAM
+#AC_MACRO_FUNC
+#AC_MACRO_LARGE_FUNC
+#AC_MACRO_LINE
+#AC_MACRO_FILE
+#ACX_PTHREAD
+#LIBS="$LIBS $PTHREAD_CFLAGS"
+#AC_SUBST(LIBS)
+AC_OUTPUT(Makefile)
