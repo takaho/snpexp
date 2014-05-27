@@ -23,3 +23,11 @@
 # Others
 *~
 .*
+src/Makefile.in
+src/Makefile
+src/config.log
+src/config.status
+*.py
+src/snpexp
+test*
+src/trimvcf
