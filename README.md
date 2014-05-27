@@ -33,14 +33,21 @@ Filename of output. If no filename is given, the result will be outputted to sta
 ###-G FILENAME
 GTF file of gene annotation which includes genic positions.
 
+###-I
+Retain intergenic SNPs.
+
 ###-verbose
 Verbose mode.
 
 ###-s strain1,strain2
+Straind such as C57BL6NJ, 129S1 for mice
 
 ###-m number (default 0)
 Minimum number of detected bases. If all bam files do not include the given number of bases, the SNPs will not be outputted.
 
 ### bam files
 BAM files should be sorted before processing. They should also share the same set of chromosomes because the program analyze data chromosome by chromosome.
-	  
+
+### -h
+Show command help.
+
