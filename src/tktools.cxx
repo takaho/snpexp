@@ -41,6 +41,12 @@ THE SOFTWARE.
 using namespace std;
 using namespace tktools;
 
+#ifdef _WIN32
+const char* tktools::io::file_separator() { return "\\"; } 
+#else
+const char* tktools::io::file_separator() { return "/"; } 
+#endif
+
 string tktools::strip( const string& line, const char* characters ) {
     int len = line.size();
     int start = len;
@@ -1224,7 +1230,7 @@ namespace {
 
         //char chromosome_keywords*[4] = {};
         _original_file = filename;
-        size_t pos = _original_file.rfind(tktools::io::sep);
+        size_t pos = _original_file.rfind(tktools::io::file_separator());
         if (pos == string::npos) {
             _cache_file = string(".");
             pos = 0;
@@ -1431,6 +1437,9 @@ void tktools::bio::fasta_sequence::set_sequence(int length, const char* sequence
 
 int tktools::bio::convert_chromosome_to_code(const char* name) {
     int code;
+    if (strncmp(name, "chr", 3) == 0) {
+        name += 3;
+    }
     if ( name[ 0 ] == 'X' ) {//strcmp( name, "X" ) == 0 ) {
         code = 64;
     } else if ( name[ 0 ] == 'Y' ) {// strcmp( name, "Y" ) == 0 ) {

@@ -9,4 +9,5 @@ if test -f bam.h
 then
 	AC_DEFINE(HAVE_BAM_H)
 fi
+CXXFLAGS=-O3 -Wall -pedantic
 AC_OUTPUT(Makefile)

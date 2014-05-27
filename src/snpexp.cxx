@@ -53,7 +53,7 @@ using namespace tktools::bio;
 
 using namespace tkbio;
 
-void BaseFrequency::initialize(int length) {
+void base_frequency::initialize(int length) {
     _a = new short[length];
     _c = new short[length];
     _g = new short[length];
@@ -64,14 +64,14 @@ void BaseFrequency::initialize(int length) {
     _reference = false;
 }
 
-BaseFrequency::~BaseFrequency() {
+base_frequency::~base_frequency() {
     delete[] _a;
     delete[] _c;
     delete[] _g;
     delete[] _t;
 }
 
-void BaseFrequency::clear_reference() {
+void base_frequency::clear_reference() {
     if (!_reference) return;
     for (int i = 0; i < _length; i++) {
         if (_a[i] < 0) {
@@ -87,7 +87,7 @@ void BaseFrequency::clear_reference() {
     _reference = false;
 }
     
-void BaseFrequency::set_sequence(int length, const char* sequence) {
+void base_frequency::set_sequence(int length, const char* sequence) {
     if (_reference) {
         return;
     }
@@ -111,7 +111,7 @@ void BaseFrequency::set_sequence(int length, const char* sequence) {
     _reference = true;
 }
 
-bool BaseFrequency::get_basecount(int pos, int& A, int& C, int& G, int& T) const {
+bool base_frequency::get_basecount(int pos, int& A, int& C, int& G, int& T) const {
     if (pos >= 0 && pos < _length) {
         A = _a[pos];
         C = _c[pos];
@@ -126,7 +126,7 @@ bool BaseFrequency::get_basecount(int pos, int& A, int& C, int& G, int& T) const
 
 //#define DEBUG
 
-void BaseFrequency::add(int pos, const bam1_t* read) {
+void base_frequency::add(int pos, const bam1_t* read) {
     clear_reference();
     // check cigar
     int len = read->core.n_cigar;
@@ -134,11 +134,8 @@ void BaseFrequency::add(int pos, const bam1_t* read) {
     if (len < 4) return;
 #endif
     int seqpos = 0;
-    //int relpos = 0;
     const uint32_t* cigar = bam1_cigar(read);
     const uint8_t* sequence = bam1_seq(read);
-    //int start = pos;
-    //int end = pos;
     int offset = 4;
     for (int i = 0; i < len; i++) {
         int op = bam_cigar_op(cigar[i]);
@@ -182,12 +179,6 @@ void BaseFrequency::add(int pos, const bam1_t* read) {
             pos += slen;
         } else if (op == BAM_CDEL) {
             break;
-            // pos += len;
-            // seqpos += len;
-            // if ((seqpos & 1) != 0) {
-            //     offset = 4 - offset;
-            // }                
-            //pos -= len;
         } else {
             cerr << "unknown cigar character " << op << endl;
         }
@@ -197,7 +188,7 @@ void BaseFrequency::add(int pos, const bam1_t* read) {
 #endif
 }
 
-void BaseFrequency::display_difference(BaseFrequency* b1, BaseFrequency* b2, int minimum_bases, double difference) {
+void base_frequency::display_difference(base_frequency* b1, base_frequency* b2, int minimum_bases, double difference) {
     int length = b1->length() < b2->length() ? b1->length() : b2->length();
     static const char* NUCLEOTIDES = "ACGT";
     for (int i = 0; i < length; i++) {
@@ -211,8 +202,6 @@ void BaseFrequency::display_difference(BaseFrequency* b1, BaseFrequency* b2, int
         num2[1] = b2->_c[i];
         num2[2] = b2->_g[i];
         num2[3] = b2->_t[i];
-        //int max1 = 0;
-        //int max2 = 0;
         int s1 = 0;
         int s2 = 0;
         int max_index = 0;
@@ -234,7 +223,6 @@ void BaseFrequency::display_difference(BaseFrequency* b1, BaseFrequency* b2, int
             double r2 = (double)max2 / s2;
             double diff = fabs(r1 - r2);
             if (diff > difference) {
-                //double pvalue = 0;
                 double pvalue = tktools::stat::get_pvalue_exacttest(max1, s1 - max1, max2, s2 - max2);
                 if (pvalue < 0.0001) {
                     cout << (i + 1);
@@ -245,28 +233,10 @@ void BaseFrequency::display_difference(BaseFrequency* b1, BaseFrequency* b2, int
                 }
             }
         }
-        // int s1 = a1 + c1 + g1 + t1;
-        // int s1 = a1 + c1 + g1 + t1;
-        
-        // int a2 = b2->_a[i];
-        // int c2 = b2->_c[i];
-        // int g2 = b2->_g[i];
-        // int t2 = b2->_t[i];
-        // int N2 = a2 + c2 + g2 + t2;
-
-        // if (N1 >= minimum_bases && N2 >= minimum_bases) {
-            
-        // }
-        
     }
 }
 
-void BaseFrequency::clear_data(const vector<pair<int, int> >& mask) throw (exception) {
-    //int index = 0;
-    // if (range.size() == 0) {
-    //     return;
-    // }
-
+void base_frequency::clear_data(const vector<pair<int, int> >& mask) throw (exception) {
     int p5 = 0;
     for (vector<pair<int, int> >::const_iterator it = mask.begin(); it != mask.end(); it++) {
         int p3 = it->first;
@@ -276,108 +246,25 @@ void BaseFrequency::clear_data(const vector<pair<int, int> >& mask) throw (excep
         p5 = it->second + 1;
     }
     
-    // int p5 = range[0].first - 1;
-    // int p3 = range[0].second - 1;
-    // for (int i = 0; i < _length; i++) {
-    //     if (i < p5) {
-    //         cerr << "clear " << i << " " << p3 << "-" << p5 << endl;
-    //         for (; i < p5; i++) {
-    //             _a[i] = _c[i] = _g[i] = _t[i] = 0;
-    //         }
-    //         i = p3;
-    //         index ++;
-    //     } else {
-    //         i = p3;
-    //         index++;
-    //     }
-    //     if (index >= (int)range.size()) {
-    //         for (int j = i; j < _length; j++) {
-    //             _a[i] = _c[i] = _g[i] = _t[i] = 0;
-    //         }
-    //         break;
-    //     } else {
-    //         p5 = range[index].first - 1;
-    //         p3 = range[index].second - 1;
-    //     }
-    // }
 }
 
-// namespace {
-//     bool paircomp(const pair<int, int>& lhs, const pair<int, int>& rhs) {
-//         return lhs.first < rhs.first;
-//     }
-
-//     // vector<pair<int,int> > merge_range(vector<pair<int,int> >& range) {
-//     //     vector<pair<int,int> > available;
-//     //     for (int i = (int)range.size() - 1; i > 0; i--) {
-//     //         pair<int, int>& r = range[i];
-//     //         pair<int, int>& q = range[i - 1];
-//     //         if (r.first >= q.second) {
-//     //             q.second = r.second < q.second ? q.second : r.second;
-//     //             //r.second = r.first;
-//     //         } else {
-//     //             available.push_back(r);
-//     //         }
-//     //     }
-//     //     available.push_back(range[0]);
-//     //     return available;
-//     // }
-
-//     vector<pair<int,int> > determine_exon_regions(const gtffile* gtf, string chromosome) {
-//         if (chromosome.find("chr") == 0) {
-//             chromosome = chromosome.substr(3);
-//         }
-//         const vector<gtfgene*>& genes = gtf->get_genes();
-//         vector<pair<int,int> > regions;
-//         for (int i = 0; i < (int)genes.size(); i++) {
-//             const gtfgene* gene = genes[i];
-//             if (gene->chromosome() == chromosome) {
-//                 vector<gtfexon> exons = gene->exons();
-//                 for (int j = 0; j < (int)exons.size(); j++) {
-//                     regions.push_back(make_pair(exons[j].position5() - 1, exons[j].position3()));
-//                 }
-//             }
-//         }
-//         if (regions.size() <= 1) {
-//             return regions;
-//         }
-//         sort(regions.begin(), regions.end(), paircomp);
-//         vector<pair<int,int> > merged;
-//         int start = regions[0].first;
-//         int end = regions[1].second;
-//         for (int i = 1; i < (int)regions.size(); i++) {
-//             int s = regions[i].first;
-//             int e = regions[i].second;
-//             if (start < e && s <= end) {
-//                 end = e < end ? end : e;
-//             } else {
-//                 merged.push_back(make_pair(start, end));
-//                 start = s;
-//                 end = e;
-//             }
-//         }
-//         merged.push_back(make_pair(start, end));
-//         return merged;
-//     }
-// }
-
-SNPAllele::SNPAllele(const string& name, const string& chromosome, int location, const string& reference, const string& alternative) {
+snp_allele::snp_allele(const string& name, const string& chromosome, int location, const string& reference, const string& alternative) {
     _name = name;
-    _chromosome = convert_chromosome_to_code(chromosome.find("chr") == 0 ? chromosome.c_str() + 3 : chromosome.c_str());
+    _chromosome = convert_chromosome_to_code(chromosome.c_str());
     _position = location;
     _reference = reference;
     _alternative = alternative;
 }
 
-SNPAllele::SNPAllele(const string& name, const string& chromosome, int location) {
+snp_allele::snp_allele(const string& name, const string& chromosome, int location) {
     _name = name;
-    _chromosome = convert_chromosome_to_code(chromosome.find("chr") == 0 ? chromosome.c_str() + 3 : chromosome.c_str());
+    _chromosome = convert_chromosome_to_code(chromosome.c_str());
     _position = location;
     _reference = ".";
     _alternative = ".";
 }
 
-bool SNPAllele::compare_position(const SNPAllele* lhs, const SNPAllele* rhs) {
+bool snp_allele::compare_position(const snp_allele* lhs, const snp_allele* rhs) {
     if (lhs->_chromosome != rhs->_chromosome) {
         return lhs->_chromosome < rhs->_chromosome;
     } else {
@@ -385,11 +272,11 @@ bool SNPAllele::compare_position(const SNPAllele* lhs, const SNPAllele* rhs) {
     }
 }
 
-string SNPAllele::chromosome() const {
+string snp_allele::chromosome() const {
     return convert_code_to_chromosome(_chromosome);
 }
 
-void SNPAllele::set_variation(const string& variation) {
+void snp_allele::set_variation(const string& variation) {
     _variation = variation;
 }
 
@@ -407,19 +294,61 @@ namespace {
     }
 }
 
-vector<SNPAllele*> SNPAllele::load_vcf(const char* filename, const vector<string>& strains) throw (exception) {
+vector<snp_allele*> snp_allele::load_vcf(const char* filename, const vector<string>& strains, const char* filename_gtf, bool verbose) throw (exception) {
     ifstream fi(filename);
     if (fi.is_open() == false) {
         throw invalid_argument("no vcf file");
     }
-    vector<SNPAllele*> snps;
+    vector<snp_allele*> snps;
     vector<int> strain_columns;
+    gtffile* gtf = NULL;
+    if (filename_gtf != NULL) {
+        gtf = gtffile::load_gtf(filename_gtf);
+    }
+
+    size_t num_snps = 0;
+    size_t num_snps_accepted = 0;
+    string prev_chrm;
+    size_t filesize = 0;
+    if (verbose) {
+        filesize = get_file_size(filename);
+    }
+
+    if (verbose) {
+        cerr << "#Chr   SNPs (accepted)   SNPs (all)\n";
+    }
     while (fi.eof() == false) {
         string line;
         getline(fi, line);
         vector<string> items = split_items(line, '\t');
         if (items.size() > 4 && line.c_str()[0] != '#') {
-            SNPAllele* snp = new SNPAllele(items[2], items[0], atoi(items[1].c_str()), items[3], items[4]);
+            const string& chromosome = items[0];
+
+            if (verbose) {
+                if (prev_chrm != chromosome) {
+                    if (num_snps > 0) {
+                        cerr << " " << setw(3) << prev_chrm << " " << setw(8) << num_snps_accepted << " " << setw(8) << num_snps << "     " << endl;
+                        num_snps = 0;
+                        num_snps_accepted = 0;
+                    }
+                    prev_chrm = chromosome;
+                }
+                num_snps++;
+                if (num_snps % 1000 == 0) {
+                    double percentage = (double)fi.tellg() * 100.0 / filesize;
+                    cerr << " " << setprecision(3) << percentage << "%  " << num_snps << "       \r";
+                }
+            }
+
+            int location = atoi(items[1].c_str());
+            if (gtf != NULL && gtf->contains_in_exon(chromosome, location) == false) {
+
+                //gtf->contains_in_exon_debug(chromosome, location);
+                continue;
+            }
+            num_snps_accepted++;
+
+            snp_allele* snp = new snp_allele(items[2], chromosome, location, items[3], items[4]);
             if (strain_columns.size() > 0) {
                 string info = "";
                 for (int i = 0; i < (int)strain_columns.size(); i++) {
@@ -447,7 +376,15 @@ vector<SNPAllele*> SNPAllele::load_vcf(const char* filename, const vector<string
             }
         }
     }
+    if (verbose) {
+        if (num_snps > 0) {
+            cerr << " " << setw(3) << prev_chrm << " " << setw(8) << num_snps_accepted << " " << setw(8) << num_snps << "     " << endl;
+        }
+    }
     sort(snps.begin(), snps.end(), compare_position);
+    if (gtf != NULL) {
+        delete gtf;
+    }
     return snps;
 }
 
@@ -458,24 +395,28 @@ namespace {
         cerr << "snpexp [options] bam1 bam2 ...\n";
         //cerr << " -1 <bam file> : 1st aligned reads\n";
         //cerr << " -2 <bam file> : 2nd aligned reads\n";
-        cerr << " -V <vcf>      : VCF file\n";
-        cerr << " -g <fasta>    : genomic sequence\n";
+        cerr << " -V <filename> : variation file in VCF format\n";
+        cerr << " -G <fileanme> : gene position in GTF format\n";
+        //cerr << " -g <fasta>    : genomic sequence\n";
         cerr << " -o <filename> : output filename (default:stdout)\n";
         cerr << " -m <number>   : minimum base count to show SNPs\n";
         cerr << " -s <strain1,strain2,...> : straind such as C57BL6NJ, 129S1\n";
+        cerr << " -verbose      : verbose mode\n";
+        cerr << " -I            : use intergenic positions\n";
+        cerr << " -h            : show this message\n";
     }
 
-    pair<int,int> get_snps(const vector<SNPAllele*>& snps, const string& chrname) {
+    pair<int,int> get_snps(const vector<snp_allele*>& snps, const string& chrname) {
         int left = 0;
         int right = (int)snps.size();
-        int ccode = convert_chromosome_to_code(chrname.find("chr") == 0 ? chrname.c_str() + 3 : chrname.c_str());
+        int ccode = convert_chromosome_to_code(chrname.c_str());
         int index = -1;
         //cerr << "searching " << chrname << " " << ccode << endl;
         //int probe;
         int index_start, index_end;
         while (left < right) {
             int center = (left + right) >> 1;
-            const SNPAllele* snp = snps[center];
+            const snp_allele* snp = snps[center];
             if (snp->chromosome_code() < ccode) {
                 left = center + 1;
             } else if (snp->chromosome_code() > ccode) {
@@ -498,7 +439,7 @@ namespace {
         index_start = index_end = index;
         while (left < right) {
             int center = (left + right) >> 1;
-            const SNPAllele* snp = snps[center];
+            const snp_allele* snp = snps[center];
             if (snp->chromosome_code() < ccode) {
                 left = center + 1;
             } else if (snp->chromosome_code() > ccode) {
@@ -508,7 +449,7 @@ namespace {
                     index_start = 0;
                     break;
                 }
-                const SNPAllele* prev = snps[center - 1];
+                const snp_allele* prev = snps[center - 1];
                 //cerr << center << ":" << prev->chromosome_code() << endl;
                 if (prev->chromosome_code() != ccode) {
                     index_start = center;
@@ -522,7 +463,7 @@ namespace {
         right = snps.size();
         for (;;) {
             int center = (left + right) >> 1;
-            const SNPAllele* snp = snps[center];
+            const snp_allele* snp = snps[center];
             if (snp->chromosome_code() < ccode) {
                 left = center + 1;
             } else if (snp->chromosome_code() > ccode) {
@@ -532,7 +473,7 @@ namespace {
                     index_end = (int)snps.size();
                     break;
                 }
-                const SNPAllele* post = snps[center + 1];
+                const snp_allele* post = snps[center + 1];
                 //cerr << center << ":" << post->chromosome_code() << endl;
                 if (post->chromosome_code() != ccode) {
                     index_end = center;
@@ -549,21 +490,22 @@ namespace {
 
 namespace {
     void display_snps(const string& chromosome, 
-                      const vector<BaseFrequency*>& bfreqs,
-                      const vector<SNPAllele*>& snps, 
+                      const vector<base_frequency*>& bfreqs,
+                      const vector<snp_allele*>& snps, 
                       int minimum_basecount=10,
+                      const gtffile* gtf=NULL,
                       ostream* ost=NULL) {
         //cerr << "get snps " << chromosome << endl;
         pair<int, int> chrsec = get_snps(snps, chromosome);
         int num_bams = bfreqs.size();
         if (ost == NULL) {ost = &cout; }
         for (int i = chrsec.first; i < chrsec.second; i++) {
-            const SNPAllele* snp = snps[i];
+            const snp_allele* snp = snps[i];
             //cerr << i << "   \r";
             int pos = snp->position();
             bool accepted = false;
             for (int j = 0; j < num_bams; j++) {
-                const BaseFrequency* b = bfreqs[j];
+                const base_frequency* b = bfreqs[j];
                 if (b != NULL) {
                     int A, C, G, T;
                     b->get_basecount(pos - 1, A, C, G, T);
@@ -580,11 +522,27 @@ namespace {
                     *ost << "\t" << variation;
                 }
                 for (int j = 0; j < num_bams; j++) {
-                    const BaseFrequency* b = bfreqs[j];
+                    const base_frequency* b = bfreqs[j];
                     int A, C, G, T;
                     b->get_basecount(pos - 1, A, C, G, T);
                     *ost << "\t" << A << "," << C << "," << G << "," << T;
                     //*ost << "\tA:" << A << ",C:" << C << ",G:" << G << ",T:" << T;
+                }
+
+                vector<const gtfgene*> genes;
+                if (gtf != NULL) {
+                    genes = gtf->find_genes(snp->chromosome(), snp->position(), snp->position());
+                }
+                *ost << "\t";
+                if (genes.size() == 0) {
+                    *ost << ".";
+                } else {
+                    for (int j = 0; j < (int)genes.size(); j++) {
+                        if (j > 0) {
+                            *ost << " /// ";
+                        }
+                        *ost << genes[j]->transcript_id() << " // " << genes[j]->name();
+                    }
                 }
                 *ost << "\n";
             }
@@ -595,15 +553,15 @@ namespace {
 
 int main(int argc, char** argv) {
     try {
-        //const char* filename_bam1 = get_argument_string(argc, argv, "1", NULL);
-        //const char* filename_bam2 = get_argument_string(argc, argv, "2", NULL);
         const char* filename_output = get_argument_string(argc, argv, "o", NULL);
         // genomic sequence
-        const char* filename_sequence = get_argument_string(argc, argv, "g", NULL);
+        //const char* filename_sequence = get_argument_string(argc, argv, "g", NULL);
+        //const char* filename_sequence = NULL;//get_argument_string(argc, argv, "g", NULL);
         const char* filename_gtf = get_argument_string(argc, argv, "G", NULL);
         const char* filename_vcf = get_argument_string(argc, argv, "V", NULL);
         const char* strains = get_argument_string(argc, argv, "s", NULL);
         int minimum_basecount = get_argument_integer(argc, argv, "m", 0);
+        bool use_intergenic = has_option(argc, argv, "-I");
 
         vector<int> annotation_columns;
         vector<string> filenames_bam;
@@ -614,14 +572,6 @@ int main(int argc, char** argv) {
             }
         }
         int num_bams = (int)filenames_bam.size();
-        if (strains != NULL) {
-        }
-
-        //fasta_sequence* seq = load_fasta_sequence(filename_sequence);
-        //cout << seq->name() << " " << seq->length() << endl;
-        //delete seq;
-        //exit(0);
-
         bool verbose = has_option(argc, argv, "verbose");
 
         if (argc <= 1 || has_option(argc, argv, "-h")) {
@@ -637,7 +587,7 @@ int main(int argc, char** argv) {
                 cerr << "Filename " << (i + 1) << ": " << filenames_bam[i] << endl;
             }
             //cerr << "Filename 2: " << filename_bam2 << endl;
-            cerr << "Genome    : " << (filename_sequence == NULL ? "not_used" : filename_sequence) << endl;
+            //cerr << "Genome    : " << (filename_sequence == NULL ? "not_used" : filename_sequence) << endl;
             cerr << "Output    : " << (filename_output == NULL ? "stdout" : filename_output) << endl;
             if (filename_gtf != NULL) {
                 cerr << "GTF file  : " << filename_gtf << endl;
@@ -655,7 +605,7 @@ int main(int argc, char** argv) {
         ostream* ost = &cout;
         //fasta_sequence* chromosome = NULL;
         gtffile* gtf = NULL;
-        vector<SNPAllele*> snps;
+        vector<snp_allele*> snps;
 
         // setup bam structs
         for (int i = 0; i < num_bams; i++) {
@@ -677,19 +627,19 @@ int main(int argc, char** argv) {
             if (verbose) {
                 cerr << "loading GTF\n";
             }
-            gtf = gtffile::load(filename_gtf);
+            gtf = gtffile::load_gtf(filename_gtf);
         }
 
         // VCF file
+        vector<string> strain_labels;
         if (filename_vcf != NULL) {
             if (verbose) { 
                 cerr << "loading " << filename_vcf << endl;
             }
-            vector<string> strain_labels;
             if (strains != NULL) {
                 strain_labels = split_items(strains, ',');
             }
-            snps = SNPAllele::load_vcf(filename_vcf, strain_labels);
+            snps = snp_allele::load_vcf(filename_vcf, strain_labels, use_intergenic ? NULL : filename_gtf, verbose);
             if (verbose) {
                 cerr << snps.size() << " alleles loaded\n";
             }
@@ -699,31 +649,49 @@ int main(int argc, char** argv) {
             bamfiles[i] = bam_open(filenames_bam[i].c_str(), "rb");
             reads[i] = bam_init1();
             headers[i] = bam_header_read(bamfiles[i]);
-            // for (int j = 0; j < headers[i]->n_targets; j++) {
-            //     cerr << i << ":" << j << " " << headers[i]->target_name[j] << endl;
-            // }
         }
-        //exit(0);
 
-        int mode = 0; // bit 1 : read , 0: use current
+
         int current_chromosome = -1;
-        vector<BaseFrequency*> bfreqs;
-        //BaseFrequency** bfreqs = new BaseFrequency*[num_bams];
+        vector<base_frequency*> bfreqs;
+        vector<string> bam_labels;
         int* chromosomes = new int[num_bams];
         for (int i = 0; i < num_bams; i++) {
-            mode |= (1 << i);
+            //mode |= (1 << i);
             bfreqs.push_back(NULL);
             chromosomes[i] = -1;
         }
 
+        // print header
+        *ost << "#Chr\tPosition\tID_REF\tRef\tAlt";
+        if (strains != NULL) *ost << "\t" << strains;
+
+        for (int i = 0; i < num_bams; i++) {
+            string fn = filenames_bam[i];
+            size_t pos = fn.rfind(tktools::io::file_separator());
+            if (pos == string::npos) {
+                pos = 0;
+            } else {
+                pos ++;
+            }
+            size_t dot = fn.rfind('.');
+            if (dot == string::npos || dot < pos) {
+                dot = fn.size();
+            }
+            bam_labels.push_back(fn.substr(pos, dot - pos));
+            *ost << "\t" << fn.substr(pos, dot - pos);
+        }
+
+        if (filename_gtf != NULL) {
+            *ost << "\tGenes";
+        }
+        *ost << "\n";
+        // enuemrate SNPs
         for (;;) {
             bool flag_terminate = false;
-            //bool flag_break = false;
-            //bool flag_different = false;
             int max_chromosome = chromosomes[0];
             if (current_chromosome >= 0) {
                 for (int i = 0; i < num_bams; i++) {
-                    //bfreqs[i]->add(reads[i]->core.pos, reads[i]);
                     if (reads[i] != NULL) {
                         chromosomes[i] = reads[i]->core.tid;
                     } else {
@@ -743,7 +711,6 @@ int main(int argc, char** argv) {
             }
             max_chromosome = chromosomes[0];
             for (int i = 0; i < num_bams; i++) {
-                //cerr << i << " " << chromosomes[i] << " : " << headers[i]->target_name[chromosomes[i]] << endl;
                 if (max_chromosome < chromosomes[i]) {
                     max_chromosome = chromosomes[i];
                 }
@@ -752,9 +719,6 @@ int main(int argc, char** argv) {
             // skip unaligned chromosome
             for (int i = 0; i < num_bams; i++) {
                 if (chromosomes[i] != current_chromosome) {
-                    // if (verbose) {
-                    //     cerr << "skip " << i << " : " << headers[i]->target_name[chromosomes[i]] << endl;
-                    // }
                     for (;;) {
                         if (bam_read1(bamfiles[i], reads[i]) <= 0) {
                             flag_terminate = true;
@@ -773,24 +737,22 @@ int main(int argc, char** argv) {
                     bfreqs[i] = NULL;
                     continue;
                 }
-                bfreqs[i] = new BaseFrequency(chromosomes[i], headers[i]->target_name[chromosomes[i]], headers[i]->target_len[chromosomes[i]]);
+                bfreqs[i] = new base_frequency(chromosomes[i], headers[i]->target_name[chromosomes[i]], headers[i]->target_len[chromosomes[i]]);
                 bfreqs[i]->add(reads[i]->core.pos, reads[i]);
                 if (verbose) {
-                    cerr << " " << i << " reading " << headers[i]->target_name[chromosomes[i]] << "            \r";
+                    cerr << " reading " << i << ":" << bam_labels[i] << ":" << headers[i]->target_name[chromosomes[i]] << "            \r";
                 }
                 for (;;) {
                     if (bam_read1(bamfiles[i], reads[i]) <= 0) {
                         flag_terminate = true;
                         break;
                     } else if (reads[i]->core.tid != chromosomes[i]) {
-                        //cerr << i << " finished " << headers[i]->target_name[chromosomes[i]] << ", " << chromosomes[i] << " / " << reads[i]->core.tid << endl;
                         break;
                     } else {
                         bfreqs[i]->add(reads[i]->core.pos, reads[i]);
                     }
                 }
             }
-            //cerr << "setup finished \n";
 
             // Clear integenic regions
             if (current_chromosome >= 0 && gtf != NULL) {
@@ -807,39 +769,20 @@ int main(int argc, char** argv) {
                 if (verbose) {
                     cerr << "display variance " << chrname << "    \r";
                 }
-                display_snps(chrname, bfreqs, snps, minimum_basecount, ost);
+                display_snps(chrname, bfreqs, snps, minimum_basecount, gtf, ost);
             }
 
-            // for (int i = 0; i < num_bams; i++) {
-            //     delete bfreqs[i];
-            //     bfreqs[i] = NULL;
-            // }
-            // if (chromosome != NULL) {
-            //     delete chromosome;
-            // }
-            
-            // if (verbose) {
-            //     cerr << "prepare chromosome " << headers[0]->target_name[max_chromosome] << endl;
-            // }
             for (int i = 0; i < num_bams; i++) {
                 delete bfreqs[i];
                 bfreqs[i] = NULL;
-                //bfreqs[i] = new BaseFrequency(max_chromosome, headers[i]->target_name[max_chromosome], headers[i]->target_len[max_chromosome]);
             }
-            // if (filename_sequence != NULL) {
-            //     chromosome = load_fasta_sequence(filename_sequence, headers[0]->target_name[max_chromosome]);
-            // }
-            //current_chromosome = max_chromosome;
+
             if (flag_terminate) {
                 break;
             }
-            // mode = 0;
-            // for (int i = 0; i < num_bams; i++) {
-            //     if (chromosomes[i] != max_chromosome) {
-            //         mode |= (1 << i);
-            //     }
-            // }
         }
+
+        // cleanup
         if (gtf != NULL) {
             delete gtf;
         }
@@ -848,13 +791,7 @@ int main(int argc, char** argv) {
             delete bfreqs[i];
         }
         delete[] chromosomes;
-        //delete chromosome;
-
-        //delete bfreq1;
-        //delete bfreq2;
-        //delete chromosome;
-
-        for (vector<SNPAllele*>::iterator it = snps.begin(); it != snps.end(); it++) {
+        for (vector<snp_allele*>::iterator it = snps.begin(); it != snps.end(); it++) {
             delete *it;
         }
         for (int i = 0; i < num_bams; i++) {
@@ -865,13 +802,6 @@ int main(int argc, char** argv) {
         delete[] reads;
         delete[] bamfiles;
         delete[] headers;
-
-        // bam_destroy1(read1);
-        // bam_destroy1(read2);
-        // bam_header_destroy(header1);
-        // bam_header_destroy(header2);
-        // bam_close(bamfile1);
-        // bam_close(bamfile2);
 
         if (filename_output != NULL) {
             dynamic_cast<ofstream*>(ost)->close();

@@ -51,7 +51,6 @@ namespace tktools {
     }
 
     namespace io {
-        const char sep = '/';
         bool file_exists( const string& filename );
         vector<string> get_filenames( const string& directory ) throw ( exception );
         vector<string> get_filenames( const string& directory, const string& extension) throw ( exception );
@@ -60,6 +59,7 @@ namespace tktools {
         size_t get_file_size( const string& filename );
 
         bool is_directory( const char* filepath );
+        const char* file_separator();
         //bool is_file( const char* filepath );
     }
 

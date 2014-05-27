@@ -106,7 +106,7 @@ namespace {
             if (fi.is_open() == false) {
                 throw invalid_argument("cannot open input file");
             }
-            gtffile* genes = gtffile::load(gtf);
+            gtffile* genes = gtffile::load_gtf(gtf);
             while (!fi.eof()) {
                 string line;
                 getline(fi, line);
@@ -177,7 +177,7 @@ int main(int argc, char** argv) {
         if (fi.is_open() == false) {
             throw runtime_error("cannot open VCF file");
         }
-        gtffile* genes = gtffile::load(gtf);
+        gtffile* genes = gtffile::load_gtf(gtf);
         size_t num_lines = 0;
         string chromosome;
         vector<pair<int,int> > mask;

@@ -26,29 +26,29 @@ THE SOFTWARE.
 #define TKBIO_SNPEXP_HXX
 
 namespace tkbio {
-    class BaseFrequency {
+
+    // stack of nucleotides in a chromosome 
+    class base_frequency {
     private:
-        short* _a;
-        short* _c;
-        short* _g;
-        short* _t;
-        //int _size;
-        //int _position;
-        int _chid;
-        string _chname;
-        int _length;
-        bool _reference;
+        short* _a; // count of A nucleotide
+        short* _c; // count of C
+        short* _g; // count of G
+        short* _t; // count of T
+        int _chid; // chromosome id
+        string _chname; // chromosome name
+        int _length; // length of chromosome
+        bool _reference; // this is clone or not
     private:
         void initialize(int length);
         void clear_reference();
     public:
-        BaseFrequency(int chromosome, const string& name, int length) {
+        base_frequency(int chromosome, const string& name, int length) {
             _length = length;
             _chid = chromosome;
             _chname = name;
             initialize(length);
         }
-        ~BaseFrequency();
+        ~base_frequency();
         bool has_reference() const { return _reference; }
         int length() const { return _length; }
         int chromosome_id() const { return _chid; }
@@ -68,22 +68,23 @@ namespace tkbio {
         }
         bool get_basecount(int pos, int& A, int& C, int& G, int& T) const;
         void clear_data(const vector<pair<int, int> >& sorted_range) throw (exception);
-        static void display_difference(BaseFrequency* b1, BaseFrequency* b2, int minimum_bases=100, double ratio_diff=0.20);
+        static void display_difference(base_frequency* b1, base_frequency* b2, int minimum_bases=100, double ratio_diff=0.20);
     };
 
-    class SNPAllele {
-        string _name;
-        int _chromosome;
-        int _position;
-        string _reference;
-        string _alternative;
-        string _variation;
-        SNPAllele();
-        const SNPAllele& operator = (const SNPAllele& );
-        SNPAllele(const SNPAllele&);
+    // SNPs
+    class snp_allele {
+        string _name; // name of the SNPs, such as rsId
+        int _chromosome; // chromosome code
+        int _position;   // locus position
+        string _reference;   // reference sequence
+        string _alternative; // alternative sequence
+        string _variation;   // variation data
+        snp_allele();
+        const snp_allele& operator = (const snp_allele& );
+        snp_allele(const snp_allele&);
     public:
-        SNPAllele(const string& name, const string& chromosome, int location, const string& reference, const string& alternative);
-        SNPAllele(const string& name, const string& chromosome, int location);
+        snp_allele(const string& name, const string& chromosome, int location, const string& reference, const string& alternative);
+        snp_allele(const string& name, const string& chromosome, int location);
         void set_variation(const string& variation);
         const char* variation() const { return _variation.c_str(); }
         const char* reference() const { return _reference.c_str(); }
@@ -92,8 +93,8 @@ namespace tkbio {
         int position() const { return _position; }
         int chromosome_code() const { return _chromosome; }
         string chromosome() const;
-        static bool compare_position(const SNPAllele* lhs, const SNPAllele* rhs);
-        static vector<SNPAllele*> load_vcf(const char* filename, const vector<string>& strains) throw (exception);
+        static bool compare_position(const snp_allele* lhs, const snp_allele* rhs);
+        static vector<snp_allele*> load_vcf(const char* filename, const vector<string>& strains, const char* filename_gtf=NULL, bool verbose=false) throw (exception);
     };
 }
 
