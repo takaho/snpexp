@@ -34,10 +34,9 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 bin_PROGRAMS = snpexp$(EXEEXT) trimvcf$(EXEEXT)
 subdir = .
-DIST_COMMON = README $(am__configure_deps) $(srcdir)/../../depcomp \
-	$(srcdir)/../../install-sh $(srcdir)/../../missing \
-	$(srcdir)/Makefile.am $(srcdir)/Makefile.in \
-	$(top_srcdir)/configure AUTHORS COPYING ChangeLog INSTALL NEWS
+DIST_COMMON = README $(am__configure_deps) $(srcdir)/Makefile.am \
+	$(srcdir)/Makefile.in $(top_srcdir)/configure AUTHORS COPYING \
+	ChangeLog INSTALL NEWS depcomp install-sh missing
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/configure.in
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
@@ -57,7 +56,7 @@ am_trimvcf_OBJECTS = trimvcf.$(OBJEXT) gtf.$(OBJEXT) tktools.$(OBJEXT)
 trimvcf_OBJECTS = $(am_trimvcf_OBJECTS)
 trimvcf_LDADD = $(LDADD)
 DEFAULT_INCLUDES = -I.@am__isrc@
-depcomp = $(SHELL) $(top_srcdir)/../../depcomp
+depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
 am__mv = mv -f
 CXXCOMPILE = $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) \
