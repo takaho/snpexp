@@ -48,8 +48,7 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_snpexp_OBJECTS = snpexp.$(OBJEXT) seq_gene.$(OBJEXT) \
-	tktools.$(OBJEXT) gtf.$(OBJEXT)
+am_snpexp_OBJECTS = snpexp.$(OBJEXT) tktools.$(OBJEXT) gtf.$(OBJEXT)
 snpexp_OBJECTS = $(am_snpexp_OBJECTS)
 snpexp_LDADD = $(LDADD)
 am_trimvcf_OBJECTS = trimvcf.$(OBJEXT) gtf.$(OBJEXT) tktools.$(OBJEXT)
@@ -173,7 +172,7 @@ target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-snpexp_SOURCES = snpexp.cxx snpexp.hxx seq_gene.hxx seq_gene.cxx tktools.hxx tktools.cxx gtf.hxx gtf.cxx bam.h bgzf.h
+snpexp_SOURCES = snpexp.cxx snpexp.hxx tktools.hxx tktools.cxx gtf.hxx gtf.cxx bam.h bgzf.h
 trimvcf_SOURCES = trimvcf.hxx trimvcf.cxx gtf.hxx gtf.cxx tktools.hxx tktools.cxx
 AM_CXXFLAGS = -O3 -pedantic -Wall -Wno-long-long -m64 -I/usr/local/include
 AM_LDFLAGS = -L/usr/local/lib
@@ -266,7 +265,6 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/gtf.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/seq_gene.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/snpexp.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tktools.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/trimvcf.Po@am__quote@
