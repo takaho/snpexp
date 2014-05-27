@@ -2684,7 +2684,7 @@ fi
 
 # Define the identity of the package.
  PACKAGE=snpexp
- VERSION=0.1.0
+ VERSION=0.2.0
 
 
 cat >>confdefs.h <<_ACEOF
@@ -3703,16 +3703,6 @@ else
 fi
 
 
-#AC_CHECK_FUNCS(sleep)
-#AC_CHECK_FUNCS(usleep random snprintf getpagesize sysconf)
-#AC_CHECK_HEADERS(unistd.h stdint.h values.h limits.h stdlib.h pthread.h omp.h pcre.h fcntl.h sys/sysctl.h)
-#CPPFLAGS = `$CPPFLAGS -I.`
-#AC_CHECK_HEADERS(bam.h bgzf.h,,[AC_MSG_ERROR(no bam.h found)])
-if test -f bam.h
-then
-	$as_echo "#define HAVE_BAM_H 1" >>confdefs.h
-
-fi
 
 ac_ext=c
 ac_cpp='$CPP $CPPFLAGS'
@@ -4111,12 +4101,13 @@ fi
 done
 
 
-for ac_header in zlib.h
+for ac_header in zlib.h bam.h
 do :
-  ac_fn_c_check_header_mongrel "$LINENO" "zlib.h" "ac_cv_header_zlib_h" "$ac_includes_default"
-if test "x$ac_cv_header_zlib_h" = xyes; then :
+  as_ac_Header=`$as_echo "ac_cv_header_$ac_header" | $as_tr_sh`
+ac_fn_c_check_header_mongrel "$LINENO" "$ac_header" "$as_ac_Header" "$ac_includes_default"
+if eval test \"x\$"$as_ac_Header"\" = x"yes"; then :
   cat >>confdefs.h <<_ACEOF
-#define HAVE_ZLIB_H 1
+#define `$as_echo "HAVE_$ac_header" | $as_tr_cpp` 1
 _ACEOF
 
 fi
@@ -4573,20 +4564,11 @@ cat >>confdefs.h <<_ACEOF
 _ACEOF
 
 
-#AC_CXX_BOOL
-#AC_CXX_NAMESPACES
-#AC_CXX_EXCEPTIONS
-#AC_CXX_SSTREAM
-#AC_CXX_HAVE_NUMERIC_LIMITS
-#AC_CXX_MUTABLE
-#AC_CXX_STRSTREAM
-#AC_MACRO_FUNC
-#AC_MACRO_LARGE_FUNC
-#AC_MACRO_LINE
-#AC_MACRO_FILE
-#ACX_PTHREAD
-#LIBS="$LIBS $PTHREAD_CFLAGS"
-#AC_SUBST(LIBS)
+if test -f bam.h
+then
+	$as_echo "#define HAVE_BAM_H 1" >>confdefs.h
+
+fi
 ac_config_files="$ac_config_files Makefile"
 
 cat >confcache <<\_ACEOF
