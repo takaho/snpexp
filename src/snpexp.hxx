@@ -25,15 +25,17 @@ THE SOFTWARE.
 #ifndef TKBIO_SNPEXP_HXX
 #define TKBIO_SNPEXP_HXX
 
+typedef unsigned short ushort;
+
 namespace tkbio {
 
     // stack of nucleotides in a chromosome 
     class base_frequency {
     private:
-        short* _a; // count of A nucleotide
-        short* _c; // count of C
-        short* _g; // count of G
-        short* _t; // count of T
+        ushort* _a; // count of A nucleotide
+        ushort* _c; // count of C
+        ushort* _g; // count of G
+        ushort* _t; // count of T
         int _chid; // chromosome id
         string _chname; // chromosome name
         int _length; // length of chromosome

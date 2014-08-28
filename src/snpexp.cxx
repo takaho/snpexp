@@ -21,6 +21,27 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
  */
+
+
+/*
+Filename 1: SRR1171556.mm10/CD45_1.bam
+Filename 2: SRR1171557.mm10/CD45_2.bam
+Filename 3: SRR1171560.mm10/ES_1.bam
+Filename 4: SRR1171561.mm10/ES_2.bam
+Filename 5: SRR1171580.mm10/STAP_1.bam
+Filename 6: SRR1171581.mm10/STAP_2.bam
+Filename 7: SRR1171585.mm10/STAP-SC_1.bam
+Filename 8: SRR1171586.mm10/STAP-SC_2.bam
+Filename 9: SRR1171565.mm10/FI-SC_1.bam
+Filename 10: SRR1171566.mm10/FI-SC_2.bam
+Filename 11: SRR1171590.mm10/TS_1.bam
+Filename 12: SRR1171591.mm10/TS_2.bam
+Filename 13: SRR1171558.mm10/EpiSC_1.bam
+Filename 14: SRR1171559.mm10/EpiSC_2.bam
+
+
+ */
+
 #include <memory>
 #include <cstring>
 #include <string>
@@ -54,10 +75,10 @@ using namespace tktools::bio;
 using namespace tkbio;
 
 void base_frequency::initialize(int length) {
-    _a = new short[length];
-    _c = new short[length];
-    _g = new short[length];
-    _t = new short[length];
+    _a = new unsigned short[length];
+    _c = new unsigned short[length];
+    _g = new unsigned short[length];
+    _t = new unsigned short[length];
     for (int i = 0; i < length; i++) {
         _a[i] = _c[i] = _g[i] = _t[i] = 0;
     }
@@ -88,27 +109,28 @@ void base_frequency::clear_reference() {
 }
     
 void base_frequency::set_sequence(int length, const char* sequence) {
-    if (_reference) {
-        return;
-    }
-    length = length < _length ? length : _length;
-    for (int i = 0; i < length; i++) {
-        char base = sequence[i];
-        short* target;
-        if (base == 'A') {
-            target = _a;
-        } else if (base == 'C') {
-            target = _c;
-        } else if (base == 'G') {
-            target = _g;
-        } else if (base == 'T') {
-            target = _t;
-        } else {
-            continue;
-        }
-        target[i] = -1 - target[i];
-    }
-    _reference = true;
+    throw runtime_error("this method is obsolete");
+    // if (_reference) {
+    //     return;
+    // }
+    // length = length < _length ? length : _length;
+    // for (int i = 0; i < length; i++) {
+    //     char base = sequence[i];
+    //     ushort* target;
+    //     if (base == 'A') {
+    //         target = _a;
+    //     } else if (base == 'C') {
+    //         target = _c;
+    //     } else if (base == 'G') {
+    //         target = _g;
+    //     } else if (base == 'T') {
+    //         target = _t;
+    //     } else {
+    //         continue;
+    //     }
+    //     target[i] = -1 - target[i];
+    // }
+    // _reference = true;
 }
 
 bool base_frequency::get_basecount(int pos, int& A, int& C, int& G, int& T) const {
@@ -545,6 +567,7 @@ namespace {
                     }
                 }
                 *ost << "\n";
+                *ost << flush;
             }
         }
     }
@@ -560,6 +583,7 @@ int main(int argc, char** argv) {
         const char* filename_gtf = get_argument_string(argc, argv, "G", NULL);
         const char* filename_vcf = get_argument_string(argc, argv, "V", NULL);
         const char* strains = get_argument_string(argc, argv, "s", NULL);
+        const char* selected_chromosomes = get_argument_string(argc, argv, "C", NULL);
         int minimum_basecount = get_argument_integer(argc, argv, "m", 0);
         bool use_intergenic = has_option(argc, argv, "-I");
 
@@ -596,6 +620,9 @@ int main(int argc, char** argv) {
                 cerr << "VCF        : " << (filename_vcf == NULL ? "not_used" : filename_vcf) << endl;
                 cerr << "Minimum    : " << minimum_basecount << endl;
                 cerr << "Strains    : " << (strains == NULL ? "not_used" : strains) << endl;
+            }
+            if (selected_chromosomes != NULL) {
+                cerr << "Chromosomes: " << selected_chromosomes << endl;
             }
         }
 
@@ -655,6 +682,16 @@ int main(int argc, char** argv) {
         int current_chromosome = -1;
         vector<base_frequency*> bfreqs;
         vector<string> bam_labels;
+        set<string> accepted_chromosomes;
+        if (selected_chromosomes != NULL) {
+            vector<string> chrms = split_items(string(selected_chromosomes), ',');
+            for (int i = 0; i < (int)chrms.size(); i++) {
+                accepted_chromosomes.insert(chrms[i]);
+            }
+        }
+        //accepted_chromosomes.insert("chrX");
+        //accepted_chromosomes.insert("chr9");
+
         int* chromosomes = new int[num_bams];
         for (int i = 0; i < num_bams; i++) {
             //mode |= (1 << i);
@@ -732,30 +769,59 @@ int main(int argc, char** argv) {
             }
 
             // read
+            bool flag_skipping = false;
             for (int i = 0; i < num_bams; i++) {
                 if (chromosomes[i] != current_chromosome) {
                     bfreqs[i] = NULL;
                     continue;
                 }
-                bfreqs[i] = new base_frequency(chromosomes[i], headers[i]->target_name[chromosomes[i]], headers[i]->target_len[chromosomes[i]]);
-                bfreqs[i]->add(reads[i]->core.pos, reads[i]);
-                if (verbose) {
-                    cerr << " reading " << i << ":" << bam_labels[i] << ":" << headers[i]->target_name[chromosomes[i]] << "            \r";
+                string chromosome_name = headers[i]->target_name[chromosomes[i]];
+                if (accepted_chromosomes.size() == 0 || accepted_chromosomes.find(chromosome_name) != accepted_chromosomes.end()) {
+                    bfreqs[i] = new base_frequency(chromosomes[i], headers[i]->target_name[chromosomes[i]], headers[i]->target_len[chromosomes[i]]);
+                    bfreqs[i]->add(reads[i]->core.pos, reads[i]);
+                    if (verbose) {
+                        cerr << " reading " << i << ":" << bam_labels[i] << ":"
+                             << chromosome_name << "         \r";
+                        //<< headers[i]->target_name[chromosomes[i]] << "            \r";
+                    }
+                } else {
+                    if (!flag_skipping) {
+                        for (int j = 0; j < i; j++) {
+                            delete bfreqs[i];
+                            bfreqs[i] = NULL;
+                        }
+                        if (verbose) {
+                            cerr << "skipping chromosome " << chromosome_name << endl;
+                        }
+                    }
+                    flag_skipping = true;
+                    bfreqs[i] = NULL;
                 }
-                for (;;) {
-                    if (bam_read1(bamfiles[i], reads[i]) <= 0) {
-                        flag_terminate = true;
-                        break;
-                    } else if (reads[i]->core.tid != chromosomes[i]) {
-                        break;
-                    } else {
-                        bfreqs[i]->add(reads[i]->core.pos, reads[i]);
+                if (bfreqs[i] == NULL) { // skip
+                    for (;;) {
+                        if (bam_read1(bamfiles[i], reads[i]) <= 0) {
+                            flag_terminate = true;
+                            break;
+                        } else if (reads[i]->core.tid != chromosomes[i]) {
+                            break;
+                        }
+                    }
+                } else {
+                    for (;;) {
+                        if (bam_read1(bamfiles[i], reads[i]) <= 0) {
+                            flag_terminate = true;
+                            break;
+                        } else if (reads[i]->core.tid != chromosomes[i]) {
+                            break;
+                        } else {
+                            bfreqs[i]->add(reads[i]->core.pos, reads[i]);
+                        }
                     }
                 }
             }
 
             // Clear integenic regions
-            if (current_chromosome >= 0 && gtf != NULL) {
+            if (current_chromosome >= 0 && gtf != NULL && !flag_skipping) {
                 vector<gtfgene*> genes = gtf->get_genes();
                 vector<pair<int,int> > active_range = gtf->get_exonregion(headers[0]->target_name[current_chromosome]);
                 for (int i = 0; i < num_bams; i++) {
@@ -764,7 +830,7 @@ int main(int argc, char** argv) {
             }
 
             // display SNPs
-            if (snps.size() > 0) {
+            if (snps.size() > 0 && !flag_skipping) {
                 string chrname = headers[0]->target_name[current_chromosome];
                 if (verbose) {
                     cerr << "display variance " << chrname << "    \r";
