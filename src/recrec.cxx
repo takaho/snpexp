@@ -31,15 +31,36 @@ fragment::fragment(const string& chromosome, int position, int flag, const strin
     _flag = flag;
     _sequence = sequence;
     _mapped = resolve_map(position, cigar, sequence);
+    _position5 = 2000000000;
+    _position3 = 0;
+    initialize(position, cigar, sequence);
+
+    for (vector<pair<int,char> >::const_iterator it = _mapped.begin(); it != _mapped.end(); it++) {
+        int pos = it->first;
+        if (pos < _position5) _position5 = pos;
+        if (pos > _position3) _position3 = pos;
+    }
 }
 
 vector<pair<int,char> > fragment::resolve_map(int position, const string& cigar, const string& sequence) {
+    fragment f("chr1", position, 0, sequence, cigar);
+    return f.get_positions();
+}
+
+void fragment::initialize(const bam1_t* seq) {
+    
+}
+
+void fragment::initialize(int position, const string& sequence, const string& cigar){
     int value = 0;
     int spos = position;
     int fpos = 0;
-    vector<pair<int,char> > nucleotides;
+    //vector<pair<int,char> > nucleotides;
     const char* ptr = cigar.c_str();
     const char* seq = sequence.c_str();
+    int max_matches = 0;
+    int left = 2000000000;
+    int right = 0;
     for (int i = 0; i < (int)cigar.size(); i++) {
         char c = ptr[i];
         if (c >= '0' && c <= '9') {
@@ -47,11 +68,14 @@ vector<pair<int,char> > fragment::resolve_map(int position, const string& cigar,
                 value = atoi(ptr + i);
             }
         } else if (c == 'M') {
+            if (max_matches < value) max_matches = value;
+            if (left > spos) left = spos;
             for (int j = 0; j < value; j++) {
-                nucleotides.push_back(make_pair(spos, seq[spos]));
+                _mapped.push_back(make_pair(spos, seq[spos]));
                 spos++;
                 fpos++;
             }
+            right = spos;
         } else if (c == 'S' || c == 'H') { // soft clip & hard clip
             fpos += value;
             spos += value;
@@ -60,10 +84,12 @@ vector<pair<int,char> > fragment::resolve_map(int position, const string& cigar,
         } else if (c == 'D') {
             spos += value;
         } else {
-            throw runtime_exception(string("unknown cigar character :") + c); 
+            throw runtime_error(string("unknown cigar character :") + c); 
         }
     }
-    return nucleotides;
+    _max_match_span = max_matches;
+    _position5 = left;
+    _position3 = right;
 }
 
 namespace {
@@ -84,7 +110,7 @@ namespace {
             } else if (op == BAM_CREF_SKIP) {
                 ss << 'N';
             } else if (op == BAM_CSOFT_CLIP) {
-                ss << 'S':
+                ss << 'S';
             } else if (op == BAM_CHARD_CLIP) {
                 ss << 'H';
             } else if (op == BAM_CPAD) {
@@ -120,11 +146,14 @@ int main(int argc, char** argv) {
         bam_header_t* header;
         bamFile bamfile;
 
-        bamFile = bam_open(filename, "rb");
+        bamfile = bam_open(filename, "rb");
         header = bam_header_read(bamfile);
         read = bam_init1();
 
         while (bam_read1(bamfile, read) > 0) {
+            string cigar = resolve_cigar(read);
+            header;
+            fragment f(chromosome, position, flag, sequence, cigar);
             read->core.tid;
         }
 
