@@ -5,6 +5,9 @@
 #include <algorithm>
 #include <stdexcept>
 
+#ifndef HAVE_BAM_H
+#error You do not have bam library
+#endif
 #include <bam.h>
 
 using namespace std;
