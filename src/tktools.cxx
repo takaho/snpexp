@@ -726,7 +726,7 @@ double tktools::stat::get_pvalue_ks_pair(int n, double const* x, int m, double c
 
 namespace {
     bool option_duplicated( int argc, char** argv, const char* option = NULL ) {
-        if ( option == NULL || strlen( option ) > 1 ) {
+        if ( option == NULL || strlen( option ) <= 1 ) {
             for ( int i = 1; i < argc; i++ ) {
                 if ( argv[ i ][ 0 ] == '-' ) {
                     for ( int j = i + 1; j < argc; j++ ) {
