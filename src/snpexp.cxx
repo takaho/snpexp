@@ -426,6 +426,7 @@ namespace {
         cerr << " -verbose      : verbose mode\n";
         cerr << " -I            : use intergenic positions\n";
         cerr << " -h            : show this message\n";
+        cerr << " -H            : display only heterozygous\n";
     }
 
     pair<int,int> get_snps(const vector<snp_allele*>& snps, const string& chrname) {
@@ -511,6 +512,7 @@ namespace {
 }
 
 namespace {
+    bool only_hetero = false;
     void display_snps(const string& chromosome, 
                       const vector<base_frequency*>& bfreqs,
                       const vector<snp_allele*>& snps, 
@@ -532,8 +534,20 @@ namespace {
                     int A, C, G, T;
                     b->get_basecount(pos - 1, A, C, G, T);
                     if (A + C + G + T >= minimum_basecount) {
-                        accepted = true;
-                        break;
+                        if (only_hetero) {
+                            int nonzero = 0;
+                            if (A > 0) nonzero++;
+                            if (C > 0) nonzero++;
+                            if (G > 0) nonzero++;
+                            if (T > 0) nonzero++;
+                            if (nonzero > 1) {
+                                accepted = true;
+                                break;
+                            }
+                        } else {
+                            accepted = true;
+                            break;
+                        }
                     }
                 }
             }
@@ -585,7 +599,12 @@ int main(int argc, char** argv) {
         const char* strains = get_argument_string(argc, argv, "s", NULL);
         const char* selected_chromosomes = get_argument_string(argc, argv, "C", NULL);
         int minimum_basecount = get_argument_integer(argc, argv, "m", 0);
-        bool use_intergenic = has_option(argc, argv, "-I");
+        bool use_intergenic = has_option(argc, argv, "I");
+        bool ignore_homo = has_option(argc, argv, "H");
+
+        if (ignore_homo) {
+            only_hetero = true;
+        }
 
         vector<int> annotation_columns;
         vector<string> filenames_bam;
