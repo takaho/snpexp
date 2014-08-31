@@ -185,6 +185,110 @@ char recfragment::get_base(int pos, int& count) const {
         }
     }
 }
+void recfragment::generate_recombination_pattern(const vector<pair<int,char> >& loci, int* pattern) const {
+    int index = 0;
+    for (int i = 0; i < (int)loci.size(); i++) {
+        int pos = loci[i].first;
+        char base = loci[i].second;
+        int value = 0;
+        while (index < (int)_mapped.size()) {
+            const pair<int,char>& locus = _mapped[index];
+            if (locus.first > pos) {
+                break;
+            } else if (locus.first == pos) {
+                value = locus.second == base ? -1 : 1;
+                break;
+            } else {
+                index++;
+            }
+        }
+        pattern[i] = value;
+    }
+}
+
+pair<int,int> recfragment::get_recombination(const vector<pair<int,char> >& loci) const {
+    const int minimum_diff = 2;
+    int size = loci.size();
+    int* buffer = new int[size];
+    generate_recombination_pattern(loci, buffer);
+    int left_score = 0;
+    int right_score = 0;
+    int limit_left = 0;//size;
+    int limit_right = size;//0;
+    // int n = 0;
+    // for (int i = 0; i < size; i++) {
+    //     if (buffer[i] != 0) {
+    //         left_score += buffer[i];
+    //         if (++n >= minimum_span) {
+    //             limit_left = n;
+    //             break;
+    //         }
+    //     }
+    //     right_score += buffer[i];
+    // }
+    // n = 0;
+    // for (int i = size - 1; i >= limit_left; i--) {
+    //     if (buffer[i] != 0) {
+    //         if (++n >= minimum_span) {
+    //             limit_right = i;
+    //             for (int j = limit_left; j < size; j++) {
+    //                 right_score += buffer[j];
+    //             }
+    //             break;
+    //         }
+    //     }
+    // }
+    int index = limit_left;
+    int max_diff = 0;
+    pair<int,int> border = make_pair(-1,-1);
+    while (index < limit_right) {
+        //for (int i = 2; i < size - 2; i++) {
+        int l1 = buffer[index];
+        if (l1 != 0) {
+            for (int j = index + 1; j < limit_right; j++) {
+                int l2 = buffer[j];
+                if (l2 != 0) {
+                    if (l2 != l1) {
+                        int diff = abs(left_score - right_score);
+                        if (diff > max_diff && diff >= minimum_diff) {
+                            max_diff = diff;
+                            border = make_pair(_mapped[index].first, _mapped[j].first);
+                        }
+                    }
+                    index = j;
+                    left_score += l1;
+                    right_score -= l1;
+                    break;
+                }
+            }
+        }
+        //int l2 = buffer[i + 1];
+    }
+
+    delete[] buffer;
+    return border;
+}
+
+string recfragment::get_recombination_pattern(const vector<pair<int,char> >& loci) const {
+    int size = loci.size();
+    int* buffer = new int[size];
+    char* pat = new char[size + 1];
+    generate_recombination_pattern(loci, buffer);
+    for (int i = 0; i < size; i++) {
+        if (buffer[i] == -1) {
+            pat[i] = '_';
+        } else if (buffer[i] == 1) {
+            pat[i] = '+';
+        } else {
+            pat[i] = '.';
+        }
+    }
+    pat[size] = '\0';
+    string patern(pat);
+    delete[] pat;
+    delete[] buffer;
+    return pat;
+}
 
 namespace {
     // string resolve_cigar(const bam1_t* read) {
@@ -334,57 +438,81 @@ namespace {
     };
 }
 
-recfragment* recfragment::join(recfragment const* f1, recfragment const* f2) {
-    if (f1->_position5 > f2->_position5) {
-        recfragment const* ft = f1;
-        f1 = f2;
-        f2 = ft;
+namespace {
+    bool compare_first_index(const pair<int,char>& lhs, const pair<int,char>& rhs) {
+        return lhs.first < rhs.first;
     }
-    recfragment* frag = new recfragment();
-    frag->_name = f1->_name;
-    frag->_flag = 0;
-    frag->_position = f1->_position;
-    int last_position = 0;
-    for (int i = 0; i < (int)f1->_mapped.size(); i++) {
-        const pair<int,char>& p = f1->_mapped[i];
-        if (p.first > last_position) {
-            last_position = p.first;
-        }
-        frag->_mapped.push_back(p);
-    }
-    for (int i = 0; i < (int)f2->_mapped.size(); i++) {
-        const pair<int,char>& p = f2->_mapped[i];
-        if (p.first < last_position) {
-            
-        }
-        frag->_mapped.push_back(p);
-    }
-    frag->_position5 = f1->_position5;
-    frag->_position3 = f2->_position3;
-    frag->_max_match_span = f1->_max_match_span < f2->_max_match_span ? f2->_max_match_span : f1->_max_match_span;
-    return frag;
 }
 
-vector<recfragment*> recfragment::bundle_pairs(const vector<recfragment*>& fragments) const {
-    set<int> touched;
+void recfragment::join_sequence(const recfragment* frag) {
+    vector<pair<int,char> > bases = frag->_mapped;
+    for (vector<pair<int,char> >::const_iterator it = frag->_mapped.begin();
+         it != frag->_mapped.end(); it++) {
+        _mapped.push_back(*it);
+    }
+    if ((_position3 > frag->_position5 && _position5 <= frag->_position3)) {
+        sort(_mapped.begin(), _mapped.end(), compare_first_index);
+        //vector<int> ambiguous;
+        for (int i = (int)_mapped.size() - 1; i > 0; i--) {
+            if (_mapped[i].first == _mapped[i-1].first) {
+                if (_mapped[i].second != _mapped[i-1].second) {
+                    //ambiguous.push_back(i);
+                    _mapped.erase(_mapped.begin() + i, _mapped.begin() + i + 2);
+                }
+                i--;
+            }
+        }
+    }
+    _position3 = _position3 > frag->_position3 ? _position3 : frag->_position3;
+    _position5 = _position5 < frag->_position5 ? _position5 : frag->_position5;
+}
+
+// recfragment* recfragment::join(recfragment const* f1, recfragment const* f2) {
+//     if (f1->_position5 > f2->_position5) {
+//         recfragment const* ft = f1;
+//         f1 = f2;
+//         f2 = ft;
+//     }
+//     recfragment* frag = new recfragment();
+//     frag->_name = f1->_name;
+//     frag->_flag = 0;
+//     frag->_position = f1->_position;
+//     int last_position = 0;
+//     for (int i = 0; i < (int)f1->_mapped.size(); i++) {
+//         const pair<int,char>& p = f1->_mapped[i];
+//         if (p.first > last_position) {
+//             last_position = p.first;
+//         }
+//         frag->_mapped.push_back(p);
+//     }
+//     for (int i = 0; i < (int)f2->_mapped.size(); i++) {
+//         const pair<int,char>& p = f2->_mapped[i];
+//         if (p.first < last_position) {
+            
+//         }
+//         frag->_mapped.push_back(p);
+//     }
+//     frag->_position5 = f1->_position5;
+//     frag->_position3 = f2->_position3;
+//     frag->_max_match_span = f1->_max_match_span < f2->_max_match_span ? f2->_max_match_span : f1->_max_match_span;
+//     return frag;
+// }
+
+void recfragment::bundle_pairs(vector<recfragment*>& fragments) throw (runtime_error) {
     vector<recfragment*> bundled;
     for (int i = 0; i < (int)fragments.size(); i++) {
-        if (touched.find(i) != touched.end()) continue;
         recfragment* p = fragments[i];
-        bool bound = false;
+        if (p == NULL) continue;
         for (int j = i + 1; j < (int)fragments.size(); j++) {
             recfragment* q = fragments[j];
             if (p->name() == q->name()) {
-                bundled.push_back(join_pair(p, q));
-                touched.insert(j);
+                p->join_sequence(q);
+                delete q;
+                fragments[j] = NULL;
                 break;
             }
         }
-        if (!bound) {
-            bundled.push_back(p);
-        }
     }
-    return bundled;
 }
 
 ostream& operator << (ostream& ost, const recfragment& rhs) {
@@ -394,14 +522,15 @@ ostream& operator << (ostream& ost, const recfragment& rhs) {
 
 
 namespace {
-    void detect_recombination(const vector<recfragment*>& fragments,
-                              const string& chromosome_name,
-                              int chromosome_length,
-                              char const* chromosome_sequence,
-                              int start, int end,
-                              int minimum_coverage=10,
-                              float hetero_threshold=0.2f) throw (exception) {
-        vector<recfragment*> bound = bundle_pairs(fragments);
+    vector<pair<int,char> > 
+    scan_heterozygous_loci(vector<recfragment*>& fragments,
+                           const string& chromosome_name,
+                           int chromosome_length,
+                           char const* chromosome_sequence,
+                           int start, int end,
+                           int minimum_coverage=10,
+                           float hetero_threshold=0.2f) throw (exception) {
+        //vector<recfragment*> bound = bundle_pairs(fragments);
         int freq[5];
         vector<pair<int,char> > hetero_loci;
         for (int pos = start; pos < end; pos++) {
@@ -459,9 +588,24 @@ namespace {
                 }
             }
         }
-        for (int i = 0; i < (int)bound.size(); i++) {
-            if (bound[i]->is_temporary()) {
-                delete bound[i];
+        return hetero_loci;
+    }
+
+    void detect_recombination(vector<recfragment*>& fragments,
+                              const string& chromosome_name,
+                              int chromosome_length,
+                              char const* chromosome_sequence,
+                              int start, int end,
+                              int minimum_coverage=10,
+                              float hetero_threshold=0.20f) throw (exception) {
+        // bind pairs
+        recfragment::bundle_pairs(fragments);
+        vector<pair<int,char> > hetero_loci = scan_heterozygous_loci(fragments, chromosome_name, chromosome_length, chromosome_sequence, start, end, minimum_coverage, hetero_threshold);
+        for (int i = 0; i < (int)fragments.size(); i++) {
+            pair<int,int> site = fragments[i]->get_recombination(hetero_loci);
+            if (site.first < site.second) {
+                string pattern = fragments[i]->get_recombination_pattern(hetero_loci);
+                cout << pattern << "\t" << fragments[i]->name();
             }
         }
     }

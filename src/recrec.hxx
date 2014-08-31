@@ -24,7 +24,9 @@ namespace tkbio {
         void initialize(int position, const string& sequence, const string& cigar);
         void initialize(bam1_t* sequence);
         vector<pair<int,char> > get_positions() const;
-        static recfragment* join_pair(recfragment* f1, recfragment* f2);
+        //static recfragment* join_pair(recfragment* f1, recfragment* f2);
+        void join_sequence(const recfragment* frag);
+        void generate_recombination_pattern(const vector<pair<int,char> >& loci, int* pattern) const;
         recfragment();
     public:
         recfragment(const string& chromosome, int position, int flag, const string& sequence, const string& cigar);
@@ -39,9 +41,14 @@ namespace tkbio {
         
         //int length() const { return _length; }
         char orientation() const { return (_flag & 16) == 0 ? '+' : '-'; }
-        char get_base(int position) const;
+        char get_base(int position, int& count) const;
         void test_heterozygosity(int num, char const* reference, char* const alt, int* result) const;
-        static vector<recfragment*> bundle_pairs(const vector<recfragment*>& fragments) const;
+
+        string get_recombination_pattern(const vector<pair<int,char> >& loci) const;
+        pair<int,int> get_recombination(const vector<pair<int,char> >& loci) const;
+
+        // join pairs
+        static void bundle_pairs(vector<recfragment*>& fragments) throw (runtime_error);
 
         static vector<pair<int,char> > resolve_map(int position, const string& cigar, const string& sequence);
         static void detect_recombination(const vector<recfragment*>& frags,
