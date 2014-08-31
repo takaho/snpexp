@@ -1,6 +1,6 @@
-bin_PROGRAMS = snpexp trimvcf #recrec
+bin_PROGRAMS = snpexp trimvcf recrec
 #managevcf_SOURCES = managevcf.cxxtktools.hxx tktools.cxx 
-#recrec_SOURCES = recrec.cxx recrec.hxx tktools.hxx tktools.cxx gtf.hxx gtf.cxx 
+recrec_SOURCES = recrec.cxx recrec.hxx tktools.hxx tktools.cxx gtf.hxx gtf.cxx 
 snpexp_SOURCES = snpexp.cxx snpexp.hxx tktools.hxx tktools.cxx gtf.hxx gtf.cxx 
 trimvcf_SOURCES = trimvcf.hxx trimvcf.cxx gtf.hxx gtf.cxx tktools.hxx tktools.cxx
 CXX = c++
