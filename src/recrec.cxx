@@ -25,7 +25,7 @@ using namespace tktools::bio;
 
 using namespace tkbio;
 
-//#define TEST 1
+#define TEST 1
 
 // recfragment::recfragment(const string& chromosome, int position, int flag, const string& sequence, const string& cigar) {
 //     _chromosome = convert_chromosome_to_code(chromosome.c_str());
@@ -56,7 +56,7 @@ recfragment::recfragment(int chromosome, bam1_t* seq) {
 // }
 
 namespace {
-    char _bamnucleotide[17] = "?AC?G???T??????N";
+    char _bamnucleotide[17] = "\?AC\?G\?\?\?T\?\?\?\?\?-N";
     char _index2nucleotide[6] = "ACGT-";
     string resolve_cigar(const bam1_t* read) {
         const uint32_t* cigar = bam1_cigar(read);
@@ -360,17 +360,24 @@ namespace {
         size_t size_seq = 0;
         unsigned char* buffer = new unsigned char[size_buffer];
         int chrmcode = -1;
+        size_t total = 0;
         while (!fi.eof()) {
             string line;
             getline(fi, line);
             if (line.c_str()[0] == '>') {
                 if (chrmcode > 0) {
-                    unsigned char* clone = new unsigned char[(size_seq >> 1) + 2];
+                    unsigned char* clone = new unsigned char[size_seq / 2 + 1];
+                    total += size_seq / 2 + 1;
+                    //cerr << chrmcode << ":" << size_seq / 2 << endl;
                     for (int i = 0; i < size_seq; i+= 2) {
                         clone[i >> 2] = (buffer[i] << 4) | (buffer[i+1]);
+                        // if (clone[i>>2] != 0xff) {
+                        //     cout << i << ":" << hex << (int)clone[i >> 2] << dec << endl;
+                        // }
                     }
                     chromosomes.insert(make_pair(chrmcode, make_pair(size_seq, clone)));
 #ifdef TEST
+                    chrmcode = -1;
                     break;
 #endif
                 }
@@ -391,20 +398,28 @@ namespace {
                         code = 0x08; break;
                     case '-': 
                         code = 0x0E; break;
+                    case 'n': case 'N':
+                        code = 0x0f; break;
                     default:
-                        code = 0x0F; break;
+                        code = 0; break;
                     }
-                    buffer[size_seq++] = code;
+                    if (code != 0) {
+                        buffer[size_seq++] = code;
+                    }
                 }
             }
         }
         if (chrmcode > 0) {
-            unsigned char* clone = new unsigned char[(size_seq >> 1) + 2];
+            total += size_seq / 2 + 1;
+            unsigned char* clone = new unsigned char[size_seq / 2 + 1];
             for (int i = 0; i < size_seq; i+= 2) {
                 clone[i >> 2] = (buffer[i] << 4) | (buffer[i+1]);
             }
             chromosomes.insert(make_pair(chrmcode, make_pair(size_seq, clone)));
         }
+        cout << total / 1000000 << endl;
+        // sleep(100);
+        // exit(0);
         delete[] buffer;
         fi.close();
         return chromosomes;
@@ -526,9 +541,9 @@ namespace {
         //vector<recfragment*> bound = bundle_pairs(fragments);
         int freq[5];
         vector<pair<int,char> > hetero_loci;
-        int offset = (start & 1) != 0 ? 4 : 0;
+        int offset = (start & 1) == 0 ? 4 : 0;
         for (int pos = start; pos < end; pos++) {
-            unsigned char ref = (chromosome_sequence[pos >> 1]) >> offset;
+            unsigned char ref = ((chromosome_sequence[pos >> 1]) >> offset) & 0xF;
             offset = 4 - offset;
             int refid;
             switch (ref) {
@@ -579,7 +594,7 @@ namespace {
                         hetero_loci.push_back(make_pair(pos, _index2nucleotide[alt_index]));
 // SNP
                         // if (pos >= 4805000 && pos < 4812205) {
-                        //     cout << chromosome_name << ":" << pos << "\t" << ref << "\t" << _index2nucleotide[alt_index] << "\tA:" << freq[0] << " C:" << freq[1] << " G:" << freq[2] << " T:" << freq[3] << " -:" << freq[4] << " // " << hetero_loci.size() << endl;
+                        cout << chromosome_name << ":" << pos << "\t" << _bamnucleotide[ref] << "\t" << _index2nucleotide[alt_index] << "\tA:" << freq[0] << " C:" << freq[1] << " G:" << freq[2] << " T:" << freq[3] << " -:" << freq[4] << " // " << hetero_loci.size() << endl;
                         // }                        
                     }
                 }
@@ -758,7 +773,7 @@ retain_end
                     }
                     fragments.erase(fragments.begin(), fragments.end());
                     current_bamchrm = read->core.tid;
-                   current_chromosome = next_chromosome;
+                    current_chromosome = next_chromosome;
                 } else {
                     // delete outsiders
                     {
