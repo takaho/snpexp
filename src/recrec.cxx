@@ -25,7 +25,7 @@ using namespace tktools::bio;
 
 using namespace tkbio;
 
-#define TEST 1
+//#define TEST 1
 
 // recfragment::recfragment(const string& chromosome, int position, int flag, const string& sequence, const string& cigar) {
 //     _chromosome = convert_chromosome_to_code(chromosome.c_str());
@@ -58,7 +58,40 @@ recfragment::recfragment(int chromosome, bam1_t* seq) {
 namespace {
     char _bamnucleotide[17] = "?AC?G???T??????N";
     char _index2nucleotide[6] = "ACGT-";
+    string resolve_cigar(const bam1_t* read) {
+        const uint32_t* cigar = bam1_cigar(read);
+        int len = read->core.n_cigar;
+        stringstream ss;
+        for (int i = 0; i < len; i++) {
+            int op = bam_cigar_op(cigar[i]);
+            int slen = bam_cigar_oplen(cigar[i]);
+            ss << slen;
+            if (op == BAM_CMATCH) {
+                ss << 'M';
+            } else if (op == BAM_CINS) {
+                ss << 'I';
+            } else if (op == BAM_CDEL) {
+                ss << 'D';
+            } else if (op == BAM_CREF_SKIP) {
+                ss << 'N';
+            } else if (op == BAM_CSOFT_CLIP) {
+                ss << 'S';
+            } else if (op == BAM_CHARD_CLIP) {
+                ss << 'H';
+            } else if (op == BAM_CPAD) {
+                ss << 'P';
+            } else if (op == BAM_CEQUAL) {
+                ss << 'M';
+            } else if (op == BAM_CDIFF) {
+                ss << 'X';
+            } else if (op == BAM_CBACK) {
+                break;
+            }
+        }
+        return ss.str();
+    }
 }
+
 void recfragment::initialize(bam1_t* read) {
     const uint32_t* cigar = bam1_cigar(read);
     const uint8_t* sequence = bam1_seq(read);
@@ -83,27 +116,35 @@ void recfragment::initialize(bam1_t* read) {
                 _max_match_span = slen;
             }
             for (int j = 0; j < slen; j++) {
-                //int offset = (fpos & 1) == 0 ? 4 : 0;
                 uint8_t base = (sequence[fpos >> 1] >> offset) & 15;
                 offset = 4 - offset;
+//4806006-4806007
+
+// EACH_BASE
+                // if (spos >= 4806205 && spos < 4812205) {
+                //     //if (spos >= 108878842 && spos <= 108878843) {
+                // // if (spos >= 3008510 && spos < 3008520) {
+                //      cout << _name << ":" << spos << ":" << resolve_cigar(read) << "\t" << _bamnucleotide[base] << endl;
+                // }
                 //cout << spos << ":" << (int)(base) << ":" << _bamnucleotide[base] << endl;
-                _mapped.push_back(make_pair(spos++, _bamnucleotide[base]));
+                _mapped.push_back(make_pair(spos, _bamnucleotide[base]));
+                spos++;
                 fpos++;
             }
-        } else if (op == BAM_CINS) {
+        } else if (op == BAM_CINS) { // I
             fpos += slen;
-            //ss << 'I';
-        } else if (op == BAM_CDEL) {
-            for (int j = 0; j < slen; j++) {
-                _mapped.push_back(make_pair(spos++, '.'));
+            if ((slen & 1) != 0) {
+                offset = 4 - offset;
             }
-                                  //spos += slen;
-            //ss << 'D';
-        // } else if (op == BAM_CREF_SKIP) {
-        //     ss << 'N';
+        } else if (op == BAM_CDEL) { // D
+            for (int j = 0; j < slen; j++) {
+                _mapped.push_back(make_pair(spos + j, '-'));
+            }
+            spos += slen;
         } else if (op == BAM_CSOFT_CLIP || op == BAM_CHARD_CLIP) { // S or H
-            fpos ++;
-            spos ++;
+            //fpos ++;
+            //spos ++;
+            break;
         // } else if (op == BAM_CPAD) {
         //     ss << 'P';
         // } else if (op == BAM_CEQUAL) {
@@ -112,6 +153,8 @@ void recfragment::initialize(bam1_t* read) {
         //     ss << 'X';
         } else if (op == BAM_CBACK) {
             break;
+        } else {
+            cerr << "unknown " << op << ", " << slen << " " << resolve_cigar(read) << endl;
         }
     }
     _position3 = spos;
@@ -176,7 +219,7 @@ char recfragment::get_base(int pos, int& count) const {
         } else {
             count = 1;
             if (center > 0 && _mapped[center - 1].first == pos) count++;
-            if (center < size - 1 && _mapped[center - 1].first == pos) count++;
+            if (center < size - 1 && _mapped[center + 1].first == pos) count++;
             return p.second;
         }
         if (left == right) {
@@ -206,8 +249,8 @@ void recfragment::generate_recombination_pattern(const vector<pair<int,char> >& 
     }
 }
 
-pair<int,int> recfragment::get_recombination(const vector<pair<int,char> >& loci) const {
-    const int minimum_diff = 2;
+pair<int,int> recfragment::get_recombination(const vector<pair<int,char> >& loci, float diff_ratio) const {
+    const int minimum_diff = 4;
     int size = loci.size();
     int* buffer = new int[size];
     generate_recombination_pattern(loci, buffer);
@@ -215,54 +258,40 @@ pair<int,int> recfragment::get_recombination(const vector<pair<int,char> >& loci
     int right_score = 0;
     int limit_left = 0;//size;
     int limit_right = size;//0;
-    // int n = 0;
-    // for (int i = 0; i < size; i++) {
-    //     if (buffer[i] != 0) {
-    //         left_score += buffer[i];
-    //         if (++n >= minimum_span) {
-    //             limit_left = n;
-    //             break;
-    //         }
-    //     }
-    //     right_score += buffer[i];
-    // }
-    // n = 0;
-    // for (int i = size - 1; i >= limit_left; i--) {
-    //     if (buffer[i] != 0) {
-    //         if (++n >= minimum_span) {
-    //             limit_right = i;
-    //             for (int j = limit_left; j < size; j++) {
-    //                 right_score += buffer[j];
-    //             }
-    //             break;
-    //         }
-    //     }
-    // }
     int index = limit_left;
-    int max_diff = 0;
+    int max_diff = 4;
+    int max_index = -1;
     pair<int,int> border = make_pair(-1,-1);
+    for (int i = 0; i < size; i++) {
+        right_score += buffer[i];
+    }
     while (index < limit_right) {
         //for (int i = 2; i < size - 2; i++) {
         int l1 = buffer[index];
+        bool found = false;
         if (l1 != 0) {
             for (int j = index + 1; j < limit_right; j++) {
                 int l2 = buffer[j];
                 if (l2 != 0) {
                     if (l2 != l1) {
                         int diff = abs(left_score - right_score);
-                        if (diff > max_diff && diff >= minimum_diff) {
+                        if (diff >= (abs(left_score) + abs(right_score)) * diff_ratio
+                            && diff > max_diff 
+                            && abs(left_score) >= minimum_diff
+                            && abs(right_score) >= minimum_diff) {
                             max_diff = diff;
-                            border = make_pair(_mapped[index].first, _mapped[j].first);
+                            max_index = index;
+                            border = make_pair(loci[index].first, loci[j].first);
                         }
                     }
-                    index = j;
-                    left_score += l1;
-                    right_score -= l1;
+                    found = true;
                     break;
                 }
             }
+            left_score += l1;
+            right_score -= l1;
         }
-        //int l2 = buffer[i + 1];
+        index++;
     }
 
     delete[] buffer;
@@ -274,56 +303,26 @@ string recfragment::get_recombination_pattern(const vector<pair<int,char> >& loc
     int* buffer = new int[size];
     char* pat = new char[size + 1];
     generate_recombination_pattern(loci, buffer);
+    int pos_last = 0;
     for (int i = 0; i < size; i++) {
         if (buffer[i] == -1) {
-            pat[i] = '_';
+            pat[i] = 'A';
+            pos_last = i;
         } else if (buffer[i] == 1) {
-            pat[i] = '+';
+            pat[i] = 'a';
+            pos_last = i;
         } else {
             pat[i] = '.';
         }
     }
     pat[size] = '\0';
-    string patern(pat);
+    string pattern(pat);
     delete[] pat;
     delete[] buffer;
-    return pat;
+    return pattern;
 }
 
 namespace {
-    // string resolve_cigar(const bam1_t* read) {
-    //     const uint32_t* cigar = bam1_cigar(read);
-    //     int len = read->core.n_cigar;
-    //     stringstream ss;
-    //     for (int i = 0; i < len; i++) {
-    //         int op = bam_cigar_op(cigar[i]);
-    //         int slen = bam_cigar_oplen(cigar[i]);
-    //         ss << slen;
-    //         if (op == BAM_CMATCH) {
-    //             ss << 'M';
-    //         } else if (op == BAM_CINS) {
-    //             ss << 'I';
-    //         } else if (op == BAM_CDEL) {
-    //             ss << 'D';
-    //         } else if (op == BAM_CREF_SKIP) {
-    //             ss << 'N';
-    //         } else if (op == BAM_CSOFT_CLIP) {
-    //             ss << 'S';
-    //         } else if (op == BAM_CHARD_CLIP) {
-    //             ss << 'H';
-    //         } else if (op == BAM_CPAD) {
-    //             ss << 'P';
-    //         } else if (op == BAM_CEQUAL) {
-    //             ss << 'M';
-    //         } else if (op == BAM_CDIFF) {
-    //             ss << 'X';
-    //         } else if (op == BAM_CBACK) {
-    //             break;
-    //         }
-    //     }
-    //     return ss.str();
-    // }
-    
     int _get_chromosome_code(int length, const char* line) {
         const char* fpos = strstr(line, "chromosome");
         int code = -1;
@@ -351,24 +350,25 @@ namespace {
         return code;
     }
 
-    map<int,pair<int,char*> > load_genome(const char* filename) throw (exception) {
-        map<int,pair<int,char*> > chromosomes;
+    map<int,pair<int,unsigned char*> > load_genome(const char* filename) throw (exception) {
+        map<int,pair<int,unsigned char*> > chromosomes;
         ifstream fi(filename);
         if (!fi.is_open()) {
             throw invalid_argument("cannot open genome file");
         }
         size_t size_buffer = 300000000;
         size_t size_seq = 0;
-        char* buffer = new char[size_buffer];
+        unsigned char* buffer = new unsigned char[size_buffer];
         int chrmcode = -1;
         while (!fi.eof()) {
             string line;
             getline(fi, line);
             if (line.c_str()[0] == '>') {
                 if (chrmcode > 0) {
-                    char* clone = new char[size_seq + 1];
-                    memcpy(clone, buffer, size_seq);
-                    clone[size_seq] = '\0';
+                    unsigned char* clone = new unsigned char[(size_seq >> 1) + 2];
+                    for (int i = 0; i < size_seq; i+= 2) {
+                        clone[i >> 2] = (buffer[i] << 4) | (buffer[i+1]);
+                    }
                     chromosomes.insert(make_pair(chrmcode, make_pair(size_seq, clone)));
 #ifdef TEST
                     break;
@@ -379,18 +379,30 @@ namespace {
             } else if (chrmcode > 0) {
                 const char* ptr = line.c_str();
                 for (int i = 0; i < (int)line.size(); i++) {
-                    char c = ptr[i];
-                    if (c >= 'a' && c <= 'z') { c -= (char)('a' - 'A'); }
-                    if (c >= 'A' && c <= 'Z') {
-                        buffer[size_seq++] = c;
+                    unsigned char code;
+                    switch (ptr[i]) {
+                    case 'a': case 'A':
+                        code = 0x01; break;
+                    case 'c': case 'C':
+                        code = 0x02; break;
+                    case 'g': case 'G':
+                        code = 0x04; break;
+                    case 't': case 'T':
+                        code = 0x08; break;
+                    case '-': 
+                        code = 0x0E; break;
+                    default:
+                        code = 0x0F; break;
                     }
+                    buffer[size_seq++] = code;
                 }
             }
         }
         if (chrmcode > 0) {
-            char* clone = new char[size_seq + 1];
-            memcpy(clone, buffer, size_seq);
-            clone[size_seq] = '\0';
+            unsigned char* clone = new unsigned char[(size_seq >> 1) + 2];
+            for (int i = 0; i < size_seq; i+= 2) {
+                clone[i >> 2] = (buffer[i] << 4) | (buffer[i+1]);
+            }
             chromosomes.insert(make_pair(chrmcode, make_pair(size_seq, clone)));
         }
         delete[] buffer;
@@ -467,44 +479,15 @@ void recfragment::join_sequence(const recfragment* frag) {
     _position5 = _position5 < frag->_position5 ? _position5 : frag->_position5;
 }
 
-// recfragment* recfragment::join(recfragment const* f1, recfragment const* f2) {
-//     if (f1->_position5 > f2->_position5) {
-//         recfragment const* ft = f1;
-//         f1 = f2;
-//         f2 = ft;
-//     }
-//     recfragment* frag = new recfragment();
-//     frag->_name = f1->_name;
-//     frag->_flag = 0;
-//     frag->_position = f1->_position;
-//     int last_position = 0;
-//     for (int i = 0; i < (int)f1->_mapped.size(); i++) {
-//         const pair<int,char>& p = f1->_mapped[i];
-//         if (p.first > last_position) {
-//             last_position = p.first;
-//         }
-//         frag->_mapped.push_back(p);
-//     }
-//     for (int i = 0; i < (int)f2->_mapped.size(); i++) {
-//         const pair<int,char>& p = f2->_mapped[i];
-//         if (p.first < last_position) {
-            
-//         }
-//         frag->_mapped.push_back(p);
-//     }
-//     frag->_position5 = f1->_position5;
-//     frag->_position3 = f2->_position3;
-//     frag->_max_match_span = f1->_max_match_span < f2->_max_match_span ? f2->_max_match_span : f1->_max_match_span;
-//     return frag;
-// }
 
 void recfragment::bundle_pairs(vector<recfragment*>& fragments) throw (runtime_error) {
-    vector<recfragment*> bundled;
+    //vector<recfragment*> bundled;
     for (int i = 0; i < (int)fragments.size(); i++) {
         recfragment* p = fragments[i];
         if (p == NULL) continue;
         for (int j = i + 1; j < (int)fragments.size(); j++) {
             recfragment* q = fragments[j];
+            if (q == NULL) continue;
             if (p->name() == q->name()) {
                 p->join_sequence(q);
                 delete q;
@@ -513,6 +496,16 @@ void recfragment::bundle_pairs(vector<recfragment*>& fragments) throw (runtime_e
             }
         }
     }
+    int tail = 0;
+    for (int i = 0; i < (int)fragments.size(); i++) {
+        recfragment* p = fragments[i];
+        if (p != NULL) {
+            if (i != tail) {
+                fragments[tail++] = p;
+            }
+        }
+    }
+    fragments.erase(fragments.begin() + tail, fragments.end());
 }
 
 ostream& operator << (ostream& ost, const recfragment& rhs) {
@@ -526,22 +519,24 @@ namespace {
     scan_heterozygous_loci(vector<recfragment*>& fragments,
                            const string& chromosome_name,
                            int chromosome_length,
-                           char const* chromosome_sequence,
+                           unsigned char const* chromosome_sequence,
                            int start, int end,
                            int minimum_coverage=10,
                            float hetero_threshold=0.2f) throw (exception) {
         //vector<recfragment*> bound = bundle_pairs(fragments);
         int freq[5];
         vector<pair<int,char> > hetero_loci;
+        int offset = (start & 1) != 0 ? 4 : 0;
         for (int pos = start; pos < end; pos++) {
-            char ref = chromosome_sequence[pos];
+            unsigned char ref = (chromosome_sequence[pos >> 1]) >> offset;
+            offset = 4 - offset;
             int refid;
             switch (ref) {
-            case 'A': refid = 0; break;
-            case 'C': refid = 1; break;
-            case 'G': refid = 2; break;
-            case 'T': refid = 3; break;
-            case '-': refid = 4; break;
+            case 0x01: refid = 0; break;
+            case 0x02: refid = 1; break;
+            case 0x04: refid = 2; break;
+            case 0x08: refid = 3; break;
+            case 0x0E: refid = 4; break;
             default: refid = -1; break;
             }
             for (int i = 0; i < 5; i++) freq[i] = 0;
@@ -582,8 +577,10 @@ namespace {
                     }
                     if (max_minor > 1) {
                         hetero_loci.push_back(make_pair(pos, _index2nucleotide[alt_index]));
-                        cout << chromosome_name << ":" << pos << "\t" << ref << "\t" << _index2nucleotide[alt_index] << "\tA:" << freq[0] << " C:" << freq[1] << " G:" << freq[2] << " T:" << freq[3] << " -:" << freq[4] << endl;
-                        
+// SNP
+                        // if (pos >= 4805000 && pos < 4812205) {
+                        //     cout << chromosome_name << ":" << pos << "\t" << ref << "\t" << _index2nucleotide[alt_index] << "\tA:" << freq[0] << " C:" << freq[1] << " G:" << freq[2] << " T:" << freq[3] << " -:" << freq[4] << " // " << hetero_loci.size() << endl;
+                        // }                        
                     }
                 }
             }
@@ -594,19 +591,31 @@ namespace {
     void detect_recombination(vector<recfragment*>& fragments,
                               const string& chromosome_name,
                               int chromosome_length,
-                              char const* chromosome_sequence,
+                              unsigned char const* chromosome_sequence,
                               int start, int end,
-                              int minimum_coverage=10,
-                              float hetero_threshold=0.20f) throw (exception) {
+                              int minimum_coverage=15,
+                              float hetero_threshold=0.3f,
+                              ostream& ost=cout) throw (exception) {
         // bind pairs
         recfragment::bundle_pairs(fragments);
         vector<pair<int,char> > hetero_loci = scan_heterozygous_loci(fragments, chromosome_name, chromosome_length, chromosome_sequence, start, end, minimum_coverage, hetero_threshold);
+        float diff_degree = 0.9f;
+        bool displayed = false;
         for (int i = 0; i < (int)fragments.size(); i++) {
-            pair<int,int> site = fragments[i]->get_recombination(hetero_loci);
+            //cout << i << ":" << flush;
+            pair<int,int> site = fragments[i]->get_recombination(hetero_loci, diff_degree);
             if (site.first < site.second) {
+                if (!displayed) {
+                    ost << "\n";
+                    //cout << chromosome_name << ":" << start << "-" << end << endl;
+                    displayed = true;
+                }
                 string pattern = fragments[i]->get_recombination_pattern(hetero_loci);
-                cout << pattern << "\t" << fragments[i]->name();
+                ost << "chr" << chromosome_name << ":" << site.first << "-" << site.second << "\t" << pattern << "\t" << fragments[i]->name() << endl;
+            // } else {
+            //     cout << "no_recombination";
             }
+            //cout << endl;
         }
     }
 }
@@ -615,12 +624,12 @@ int main(int argc, char** argv) {
     try {
         const char* filename = get_argument_string(argc, argv, "i", NULL);
         int coverage = get_argument_integer(argc, argv, "c", 10);
-        double heterozygosity = get_argument_float(argc, argv, "H", 0.2);
+        double heterozygosity = get_argument_float(argc, argv, "H", 0.3);
         bool verbose = has_option(argc, argv, "verbose");
         int window_size = get_argument_integer(argc, argv, "w", 10000);
         int window_margin = get_argument_integer(argc, argv, "m", 2000);
-        //const char* snpfile = get_argument_string(argc, argv, "V", NULL);
         const char* filename_genome = get_argument_string(argc, argv, "g", NULL);
+        const char* filename_output = get_argument_string(argc, argv, "o", NULL);
 
         if (verbose) {
             cerr << "Filename         : " << filename << endl;
@@ -628,53 +637,35 @@ int main(int argc, char** argv) {
             cerr << "Heterozygosity   : " << heterozygosity << endl;
             //cerr << "Variation file   : " << snpfile << endl;
             cerr << "Genome file      : " << filename_genome << endl;
+            cerr << "Coverage         : " << coverage << endl;
         }
 
+        ostream* ost = &cout;
         vector<recfragment*> fragments;
         map<string,const recfragment*> pairs;
         bam1_t* read;
         bam_header_t* header;
         bamFile bamfile;
 
-        map<int,pair<int,char*> >  genome = load_genome(filename_genome);
-
-        // map<int,vector<hetero_locus*> > snps;
-        // if (snpfile != NULL) {
-        //     ifstream fs(snpfile);
-        //     if (!fs.is_open()) {
-        //         throw invalid_argument("cannot open SNP file");
-        //     }
-        //     while (!fs.eof()) {
-        //         string line;
-        //         getline(fs, line);
-        //         vector<string> items = split_items(line, '\t');
-        //         int chrm_code = convert_chromosome_to_code(items[0].c_str());
-        //         vector<hetero_locus*>& chrmsnps = snps.find(chrm_code);
-        //         hetero_locus* locus = hetero_locus(atoi(items[1]), items[2], items[3]);
-        //         if (locus->is_available()) {
-        //             if (chrmsnps == snps.end()) {
-        //                 vector<hetero_locus*> cs;
-        //                 cs.push_back(locus);
-        //                 snps.push_back(cs);
-        //             } else {
-        //                 chrmspns.push_back(locus);
-        //             }
-        //         } else {
-        //             delete locus;
-        //         }
-        //     }
-        //     fs.close();
-        // } else {
-        //     throw invalid_argument("snp file required");
-        // }
+        if (filename_output != NULL) {
+            ofstream* fo = new ofstream(filename_output);
+            if (fo->is_open() == false) {
+                delete fo;
+                throw invalid_argument("cannot open output stream");
+            }
+            ost = fo;
+        }
+        if (verbose) {
+            cerr << "loading genomic sequences " << flush;
+        }
+        map<int,pair<int,unsigned char*> >  genome = load_genome(filename_genome);
+        if (verbose) {
+            cerr << genome.size() << " chromosomes\n";
+        }
 
         bamfile = bam_open(filename, "rb");
         header = bam_header_read(bamfile);
         read = bam_init1();
-
-        ////int chromosome = -1;
-        //int region_start = 0;
-        //int region_end = region_start + window_size;
 
 /*
 first
@@ -696,24 +687,17 @@ analysis_end
 retain_end
 
  */
-
-        //int position_last = 0;
-        //int position_next = window_size;
-
         int retain_start = 0;
         int retain_end = window_size;
         int analysis_start = retain_start + window_margin;
         int analysis_end = retain_end - window_margin;
-
-//        int region_start, region_end;
-//        int region_start = 0;
-//        int region_end = region_start + window_size;
         int current_bamchrm = -1;
         int current_chromosome = -1;
         int next_chromosome = -1;
         int chromosome_length = 0;
         string chromosome_name;
-        const char* chromosome_sequence = NULL;
+        size_t max_fragments = 10000;
+        const unsigned char* chromosome_sequence = NULL;
 
         while (bam_read1(bamfile, read) > 0) {
             bool processing = false;
@@ -736,22 +720,22 @@ retain_end
             if (processing) {
                 // analysis
                 if (fragments.size() > coverage && chromosome_length > 0) {
-#ifdef TEST
-                    //cerr << "test\n";
-                    cout << current_chromosome << " : " << retain_start << "," << analysis_start << "," << analysis_end << "," << retain_end << " : " << fragments.size() << endl;
-                    if (fragments.size() > 1) {
-                        cout << *fragments[0] << endl;
-                        cout << *fragments[fragments.size() - 1] << endl;
+                    if (verbose) {
+                        cerr << " chr" << chromosome_name << ":" << analysis_start << "-" << analysis_end << ":" << fragments.size() << "            \r";
                     }
-#endif
-                    detect_recombination(fragments, chromosome_name, chromosome_length, chromosome_sequence, analysis_start, analysis_end);
+                    if (fragments.size() >= max_fragments) {
+                        cerr << "skip chr" << chromosome_name << ":" << analysis_start << "-" << analysis_end << " because of too much fragments " << fragments.size() << "       \n";
+                    } else {
+                        detect_recombination(fragments, chromosome_name, chromosome_length, chromosome_sequence, analysis_start, analysis_end, coverage, heterozygosity, *ost);
+                        *ost << flush;
+                    }
                 }
 
                 // change chromosome
                 if (next_chromosome != current_chromosome) {
                     //cerr << "change chromosoe\n";
 
-                    map<int, pair<int,char*> >::const_iterator _chrm = genome.find(next_chromosome);
+                    map<int, pair<int,unsigned char*> >::const_iterator _chrm = genome.find(next_chromosome);
                     if (_chrm == genome.end()) {
                         chromosome_sequence = NULL;
                         chromosome_length = 0;
@@ -760,51 +744,52 @@ retain_end
                         chromosome_sequence = _chrm->second.second;
                         chromosome_length = _chrm->second.first;
                         chromosome_name = convert_code_to_chromosome(next_chromosome);
-                        cerr << "new chromosome " << chromosome_name << " // " << chromosome_length << endl;
+                        //cerr << "new chromosome " << chromosome_name << " // " << chromosome_length << endl;
                     }
 
                     retain_start = 0;
                     analysis_start = 0;
                     analysis_end = window_size - window_margin;
                     retain_end = window_size;
-                    //cerr << fragments.size() << " => ";
+
+                    // delete all fragments
                     for (vector<recfragment*>::iterator it = fragments.begin(); it != fragments.end(); it++) {
                         delete *it;
                     }
                     fragments.erase(fragments.begin(), fragments.end());
-                    cerr << fragments.size() << "\n";
                     current_bamchrm = read->core.tid;
-                    current_chromosome = next_chromosome;
+                   current_chromosome = next_chromosome;
                 } else {
-                    //cerr << "analysis\n";
-
-                    //int limit = analysis_end - window_margin;
-                    int end = 0;
-                    for (int i = 0; i < (int)fragments.size(); i++) {
-                        if (fragments[i]->position3() < analysis_start) {
-                            delete fragments[i];
-                        } else {
-                            end = i; 
-                            break;
+                    // delete outsiders
+                    {
+                        for (int i = 0; i < (int)fragments.size(); i++) {
+                            if (fragments[i]->position3() < analysis_start) {
+                                delete fragments[i];
+                                fragments[i] = NULL;
+                            } else if (fragments[i]->position5() >= analysis_start) {
+                                break;
+                            }
                         }
+                        int index = 0;
+                        for (int i = 0; i < (int)fragments.size(); i++) {
+                            if (fragments[i] != NULL) {
+                                fragments[index++] = fragments[i];
+                            }
+                        }
+                        fragments.erase(fragments.begin() + index, fragments.end());
                     }
-                    fragments.erase(fragments.begin(), fragments.begin() + end);
-                    // for (vector<recfragment*>::iterator it = fragments.begin(); it != fragments.end(); it++) {
-                    //     delete *it;
-                    // }
+
+                    // revise analyzing window
                     analysis_start = analysis_end;
-                    retain_start = analysis_end - window_margin;
+                    if (fragments.size() > 0 && analysis_start < fragments[0]->position5()) {
+                        analysis_start = fragments[0]->position5();
+                    }
+                    retain_start = analysis_start - window_margin;
                     retain_end = retain_start + window_size;
                     analysis_end = retain_end - window_margin;
-                    if (fragments.size() > 0 && fragments[0]->position5() > analysis_start) {
-                        analysis_start = fragments[0]->position5();
-                        retain_start = analysis_start - window_margin;
-                        retain_end = retain_start + window_size;
-                        analysis_end = retain_end - window_margin;
-                    }
                 }
             }
-            if (current_chromosome > 0) {
+            if (current_chromosome > 0 && fragments.size() < max_fragments) {
                 recfragment* frag = new recfragment(current_chromosome, read);
                 fragments.push_back(frag);
             }
@@ -812,25 +797,26 @@ retain_end
 
         // process remaining
         if (fragments.size() > coverage && chromosome_length > 0) {
-            detect_recombination(fragments, chromosome_name, chromosome_length, chromosome_sequence, analysis_start, analysis_end);
+            detect_recombination(fragments, chromosome_name, chromosome_length, chromosome_sequence, analysis_start, analysis_end, coverage, heterozygosity, *ost);
         }
 
 
-        // clean up
+        // close output file
+        if (filename_output != NULL) {
+            dynamic_cast<ofstream*>(ost)->close();
+            delete ost;
+        }
+
+        // clean up fragments
         for (vector<recfragment*>::iterator it = fragments.begin(); it != fragments.end(); it++) {
             delete *it;
         }
-        for (map<int, pair<int,char*> >::iterator it = genome.begin(); it != genome.end(); it++) {
+        // clean up sequences
+        for (map<int, pair<int,unsigned char*> >::iterator it = genome.begin(); it != genome.end(); it++) {
             delete[] it->second.second;
         }
 
-//            if (chrm != chromosome
-//            string cigar = resolve_cigar(read);
-            //header;
-            //fragment f(chromosome, position, flag, sequence, cigar);
-            //read->core.tid; chromosome
-            //}
-
+        // clean up BAM
         bam_destroy1(read);
         bam_header_destroy(header);
         bam_close(bamfile);
