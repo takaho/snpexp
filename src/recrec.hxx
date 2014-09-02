@@ -13,40 +13,7 @@ typedef unsigned int uint;
 namespace tkbio {
     class recfragment;
 
-    class hetero_locus {
-    public:
-        int _chromosome;
-        int _position;
-        int _reference;
-        int _alt;
-        int _refcount;
-        int _altcount;
-    public:
-        hetero_locus(int chromosome, int position, unsigned char reference, int reference_count, unsigned char alt, int alt_count) {
-            this->_chromosome = chromosome;
-            this->_position = position;
-            this->_reference = reference;
-            this->_alt = alt;
-            this->_refcount = reference_count;
-            this->_altcount = alt_count;
-        }
-        int position() const { return _position; }
-        int chromosome_code() const { return _chromosome; }
-        string chromosome() const;
-        int count_alt() const { return _altcount; }
-        int count_ref() const { return _refcount; }
-        int get_ref() const { return _reference; }
-        int get_alt() const { return _alt; }
-        char ref() const { return "ACGT-"[_reference]; }
-        char alt() const { return "ACGT-"[_reference]; }
-        string to_string() const;
-        bool is_available() const {
-            // return 0 <= index1 && index1 < 5 && 0 <= index2 && index2 < 5;
-            return _refcount > 0 && _altcount > 0 && _reference < 5 && _altcount < 5;
-        }
-        friend class recfragment;
-    };
-
+    //// Chromosome
     class chromosome_seq {
     public:
         static const unsigned char A;
@@ -78,20 +45,12 @@ namespace tkbio {
         int bam_id() const { return _bam_code; }
         const string& name() const { return _name; }
         void set_chromosome(int num);
-        void set_sequence(int length, unsigned char* codes) {
-            if (_sequence != NULL) {
-                delete[] _sequence;
-            }
-            _length = length;
-            int size = length / 2 + 1;
-            _sequence = new unsigned char[size];
-            memcpy(_sequence, codes, sizeof(unsigned char) * size);
-        }
+        void set_sequence(int length, char const* codes);
+        void set_base(int position, char base);
+        void mask(int start, int end);
         char get_base(int pos) const;
-        unsigned char get_base_code(int pos) const {
-            unsigned char code = _sequence[pos >> 1] >> ((pos & 1) == 0 ? 4 : 0) & 0x0f;
-            return code;
-        }
+        unsigned char get_base_code(int pos) const;
+        int get_base_id(int pos) const;
         void set_bam_id(int num) {
             _bam_code = num;
         }
@@ -99,17 +58,54 @@ namespace tkbio {
         static vector<chromosome_seq*> load_genome(const char* filename) throw (exception);
     };
 
-    class recfragment {
-        string _name;
-        string _sequence;
-        string _cigar;
+    /// Heterozygous locus
+    /// containing chromosome information and reference/alt SNPs
+    class hetero_locus {
+    public:
         int _chromosome;
         int _position;
-        int _flag;
-        vector<pair<int,char> > _mapped;
-        int _position5;
-        int _position3;
-        int _max_match_span;
+        int _reference;
+        int _alt;
+        int _refcount;
+        int _altcount;
+    public:
+        hetero_locus(int chromosome, int position, unsigned char reference, int reference_count, unsigned char alt, int alt_count) {
+            this->_chromosome = chromosome;
+            this->_position = position;
+            this->_reference = reference;
+            this->_alt = alt;
+            this->_refcount = reference_count;
+            this->_altcount = alt_count;
+        }
+        int position() const { return _position; }
+        int chromosome_code() const { return _chromosome; }
+        string chromosome() const;
+        int count_alt() const { return _altcount; }
+        int count_ref() const { return _refcount; }
+        int get_ref() const { return _reference; }
+        int get_alt() const { return _alt; }
+        char ref() const { return "ACGT-"[_reference]; }
+        char alt() const { return "ACGT-"[_alt];}
+        string to_string() const;
+        bool is_available() const {
+            // return 0 <= index1 && index1 < 5 && 0 <= index2 && index2 < 5;
+            return _refcount > 0 && _altcount > 0 && _reference < 5 && _altcount < 5;
+        }
+        friend class recfragment;
+    };
+
+    ///// sequence read to detect recombination
+    class recfragment {
+        string _name;     // name of the read
+        string _sequence; // read sequence
+        string _cigar;    // CIGAR
+        int _chromosome;  // chromosome coded by tktools
+        int _position;    // chromosomal position
+        int _flag;        // SAM file flag
+        int _position5;   // upper margin of alignment
+        int _position3;   // lower margin of alignment
+        int _max_match_span;  // maximum match length
+        vector<pair<int,char> > _mapped;  // nucleotides
     private:
         // inhibit default and copy constructors
         recfragment();
@@ -123,7 +119,6 @@ namespace tkbio {
         //
         vector<pair<int,char> > get_positions() const;
         void join_sequence(const recfragment* frag);
-        //void generate_recombination_pattern(const vector<pair<int,char> >& loci, int* pattern) const;
         void generate_recombination_pattern(const vector<hetero_locus>& loci, int* pattern) const;
 
     public:
@@ -143,19 +138,17 @@ namespace tkbio {
 
         // getters
         char get_base(int position, int& count) const;
+        int get_base_id(int position, int& count) const;
         void test_heterozygosity(int num, char const* reference, char* const alt, int* result) const;
 
         // recombination test
         string get_recombination_pattern(const vector<hetero_locus>& loci) const;
         pair<int,int> get_recombination(const vector<hetero_locus>& loci, float diff_ratio=0.0) const;
-        
-        //string get_recombination_pattern(const vector<pair<int,char> >& loci) const;
-        //pair<int,int> get_recombination(const vector<pair<int,char> >& loci, float diff_ratio=0.0) const;
 
         // join pairs
         static void bundle_pairs(vector<recfragment*>& fragments) throw (runtime_error);
 
-        static vector<pair<int,char> > resolve_map(int position, const string& cigar, const string& sequence);
+        // execute recombination detection
         static void detect_recombination(const vector<recfragment*>& frags,
                                          int clength, char const* cseq,
                                          int start, int end) throw (exception);
