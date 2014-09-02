@@ -5,9 +5,8 @@ AC_CHECK_HEADERS(zlib.h bam.h)
 AC_PROG_CXX
 AC_CHECK_SIZEOF(void*, 8)
 AC_CHECK_SIZEOF(int, 4)
-if test -f bam.h
+if test -f /usr/local/include/bam.h
 then
 	AC_DEFINE(HAVE_BAM_H)
 fi
-CXXFLAGS=-O3 -Wall -pedantic
 AC_OUTPUT(Makefile)

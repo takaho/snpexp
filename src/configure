@@ -4564,12 +4564,11 @@ cat >>confdefs.h <<_ACEOF
 _ACEOF
 
 
-if test -f bam.h
+if test -f /usr/local/include/bam.h
 then
 	$as_echo "#define HAVE_BAM_H 1" >>confdefs.h
 
 fi
-CXXFLAGS=-O3 -Wall -pedantic
 ac_config_files="$ac_config_files Makefile"
 
 cat >confcache <<\_ACEOF
