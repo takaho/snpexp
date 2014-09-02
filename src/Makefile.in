@@ -32,7 +32,7 @@ POST_INSTALL = :
 NORMAL_UNINSTALL = :
 PRE_UNINSTALL = :
 POST_UNINSTALL = :
-bin_PROGRAMS = snpexp$(EXEEXT) trimvcf$(EXEEXT)
+bin_PROGRAMS = snpexp$(EXEEXT) trimvcf$(EXEEXT) recrec$(EXEEXT)
 subdir = .
 DIST_COMMON = README $(am__configure_deps) $(srcdir)/Makefile.am \
 	$(srcdir)/Makefile.in $(top_srcdir)/configure AUTHORS COPYING \
@@ -48,6 +48,9 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
+am_recrec_OBJECTS = recrec.$(OBJEXT) tktools.$(OBJEXT) gtf.$(OBJEXT)
+recrec_OBJECTS = $(am_recrec_OBJECTS)
+recrec_LDADD = $(LDADD)
 am_snpexp_OBJECTS = snpexp.$(OBJEXT) tktools.$(OBJEXT) gtf.$(OBJEXT)
 snpexp_OBJECTS = $(am_snpexp_OBJECTS)
 snpexp_LDADD = $(LDADD)
@@ -67,8 +70,8 @@ COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
 CCLD = $(CC)
 LINK = $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
-SOURCES = $(snpexp_SOURCES) $(trimvcf_SOURCES)
-DIST_SOURCES = $(snpexp_SOURCES) $(trimvcf_SOURCES)
+SOURCES = $(recrec_SOURCES) $(snpexp_SOURCES) $(trimvcf_SOURCES)
+DIST_SOURCES = $(recrec_SOURCES) $(snpexp_SOURCES) $(trimvcf_SOURCES)
 ETAGS = etags
 CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
@@ -172,7 +175,9 @@ target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-snpexp_SOURCES = snpexp.cxx snpexp.hxx tktools.hxx tktools.cxx gtf.hxx gtf.cxx bam.h bgzf.h
+#managevcf_SOURCES = managevcf.cxxtktools.hxx tktools.cxx 
+recrec_SOURCES = recrec.cxx recrec.hxx tktools.hxx tktools.cxx gtf.hxx gtf.cxx 
+snpexp_SOURCES = snpexp.cxx snpexp.hxx tktools.hxx tktools.cxx gtf.hxx gtf.cxx 
 trimvcf_SOURCES = trimvcf.hxx trimvcf.cxx gtf.hxx gtf.cxx tktools.hxx tktools.cxx
 AM_CXXFLAGS = -O3 -pedantic -Wall -Wno-long-long -m64 -I/usr/local/include
 AM_LDFLAGS = -L/usr/local/lib
@@ -251,6 +256,9 @@ uninstall-binPROGRAMS:
 
 clean-binPROGRAMS:
 	-test -z "$(bin_PROGRAMS)" || rm -f $(bin_PROGRAMS)
+recrec$(EXEEXT): $(recrec_OBJECTS) $(recrec_DEPENDENCIES) 
+	@rm -f recrec$(EXEEXT)
+	$(CXXLINK) $(recrec_OBJECTS) $(recrec_LDADD) $(LIBS)
 snpexp$(EXEEXT): $(snpexp_OBJECTS) $(snpexp_DEPENDENCIES) 
 	@rm -f snpexp$(EXEEXT)
 	$(CXXLINK) $(snpexp_OBJECTS) $(snpexp_LDADD) $(LIBS)
@@ -265,6 +273,7 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/gtf.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/recrec.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/snpexp.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tktools.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/trimvcf.Po@am__quote@
