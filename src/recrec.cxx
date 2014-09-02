@@ -25,7 +25,7 @@ using namespace tktools::bio;
 
 using namespace tkbio;
 
-//#define TEST 1
+#define TEST 1
 
 // recfragment::recfragment(const string& chromosome, int position, int flag, const string& sequence, const string& cigar) {
 //     _chromosome = convert_chromosome_to_code(chromosome.c_str());
@@ -56,7 +56,7 @@ recfragment::recfragment(int chromosome, bam1_t* seq) {
 // }
 
 namespace {
-    char _bamnucleotide[17] = "?AC?G???T??????N";
+    char _bamnucleotide[17] = "\?AC\?G\?\?\?T\?\?\?\?\?-N";
     char _index2nucleotide[6] = "ACGT-";
     string resolve_cigar(const bam1_t* read) {
         const uint32_t* cigar = bam1_cigar(read);
@@ -228,45 +228,28 @@ char recfragment::get_base(int pos, int& count) const {
         }
     }
 }
-
-//void recfragment::generate_recombination_pattern(const vector<pair<int,char> >& loci, int* pattern) const {
-void recfragment::generate_recombination_pattern(const vector<hetero_locus>& loci, int* pattern) const {
+void recfragment::generate_recombination_pattern(const vector<pair<int,char> >& loci, int* pattern) const {
     int index = 0;
     for (int i = 0; i < (int)loci.size(); i++) {
-        int pos = loci[i].position();
-        char ref = loci[i].ref();//second;
-        char alt = loci[i].alt();
+        int pos = loci[i].first;
+        char base = loci[i].second;
         int value = 0;
         while (index < (int)_mapped.size()) {
             const pair<int,char>& locus = _mapped[index];
-            if (locus.first > pos) break;
-            if (locus.first == pos) {
-                if (locus.second == ref) {
-                    value = 1;
-                } else if (locus.second == alt) {
-                    value = -1;
-                } else {
-                    value = 0;
-                }
+            if (locus.first > pos) {
+                break;
+            } else if (locus.first == pos) {
+                value = locus.second == base ? -1 : 1;
                 break;
             } else {
                 index++;
             }
-            // if (locus.first > pos) {
-            //     break;
-            // } else if (locus.first == pos) {
-            //     value = locus.second == base ? -1 : 1;
-            //     break;
-            // } else {
-            //     index++;
-            // }
         }
         pattern[i] = value;
     }
 }
 
-//pair<int,int> recfragment::get_recombination(const vector<pair<int,char> >& loci, float diff_ratio) const {
-pair<int,int> recfragment::get_recombination(const vector<hetero_locus>& loci, float diff_ratio) const {
+pair<int,int> recfragment::get_recombination(const vector<pair<int,char> >& loci, float diff_ratio) const {
     const int minimum_diff = 4;
     int size = loci.size();
     int* buffer = new int[size];
@@ -298,7 +281,7 @@ pair<int,int> recfragment::get_recombination(const vector<hetero_locus>& loci, f
                             && abs(right_score) >= minimum_diff) {
                             max_diff = diff;
                             max_index = index;
-                            border = make_pair(loci[index].position(), loci[j].position());
+                            border = make_pair(loci[index].first, loci[j].first);
                         }
                     }
                     found = true;
@@ -315,8 +298,7 @@ pair<int,int> recfragment::get_recombination(const vector<hetero_locus>& loci, f
     return border;
 }
 
-//string recfragment::get_recombination_pattern(const vector<pair<int,char> >& loci) const {
-string recfragment::get_recombination_pattern(const vector<hetero_locus>& loci) const {
+string recfragment::get_recombination_pattern(const vector<pair<int,char> >& loci) const {
     int size = loci.size();
     int* buffer = new int[size];
     char* pat = new char[size + 1];
@@ -340,135 +322,148 @@ string recfragment::get_recombination_pattern(const vector<hetero_locus>& loci) 
     return pattern;
 }
 
-void chromosome_seq::set_chromosome(int num) {
-    _code = num;
-    _name = convert_code_to_chromosome(num);
-}
-
-char chromosome_seq::get_base(int pos) const {
-    //unsigned char code = _sequence[pos >> 1] >> ((pos & 1) == 0 ? 4 : 0) & 0x0f;
-    return _bamnucleotide[get_base_code(pos)];
-}
-
-int chromosome_seq::get_chromosome_code(int length, const char* line) {
-    const char* fpos = strstr(line, "chromosome");
-    int code = -1;
-    if (fpos == NULL) {
-        fpos = strstr(line, "chr");
+namespace {
+    int _get_chromosome_code(int length, const char* line) {
+        const char* fpos = strstr(line, "chromosome");
+        int code = -1;
         if (fpos == NULL) {
-            code = convert_chromosome_to_code(line);
-        } else {
-            code = convert_chromosome_to_code(fpos + 3);
-        }
-    } else {
-        fpos += 10;
-        while (true) {
-            char c = *fpos;
-            if (c > ' ') {
-                code = convert_chromosome_to_code(fpos);
-                break;
-            } else if (c == '\0') {
-                code = -1;
-                break;
-            }
-            fpos++;
-        }
-    }
-    return code;
-}
-
-vector<chromosome_seq*> chromosome_seq::load_genome(const char* filename) throw (exception) {
-    //map<int,pair<int,unsigned char*> > chromosomes;
-    //map<int,chromosome_seq*> chromosomes;
-    vector<chromosome_seq*> chromosomes;
-    ifstream fi(filename);
-    if (!fi.is_open()) {
-        throw invalid_argument("cannot open genome file");
-    }
-    size_t size_buffer = 300000000;
-    size_t size_seq = 0;
-    unsigned char* buffer = new unsigned char[size_buffer];
-    buffer[0] = 0;
-    int chrmcode = -1;
-    chromosome_seq* seq = NULL;
-    //int offset = 4;
-    while (!fi.eof()) {
-        string line;
-        getline(fi, line);
-        if (line.c_str()[0] == '>') {
-            if (seq != NULL) {
-                //int tail = size_seq / 2 + 1;
-                seq->set_sequence(size_seq, buffer);
-                chromosomes[seq->code()] = seq;
-                buffer[0] = 0;
-                chromosomes.push_back(seq);
-                //for (int i = 0; i < tail; i++) buffer[i] = (unsigned char)0;
-                // if (chrmcode > 0) {
-                //     unsigned char* clone = new unsigned char[(size_seq >> 1) + 2];
-                //     for (int i = 0; i < size_seq; i+= 2) {
-                //         clone[i >> 2] = (buffer[i] << 4) | (buffer[i+1]);
-                //     }
-                //     chromosomes.insert(make_pair(chrmcode, make_pair(size_seq, clone)));
-#ifdef TEST
-                break;
-#endif
-            }
-            chrmcode = chromosome_seq::get_chromosome_code(line.size() - 1, line.c_str() + 1);
-            size_seq = 0;
-            if (chrmcode > 0) {
-                seq = new chromosome_seq();
-                seq->_name = line.substr(1, line.size());
-                seq->_code = chrmcode;
+            fpos = strstr(line, "chr");
+            if (fpos == NULL) {
+                code = convert_chromosome_to_code(line);
             } else {
-                seq = NULL;
+                code = convert_chromosome_to_code(fpos + 3);
             }
-        } else if (seq != NULL) {
-//            } else if (chrmcode > 0) {
-            const char* ptr = line.c_str();
-            for (int i = 0; i < (int)line.size(); i++) {
-                unsigned char code;
-                switch (ptr[i]) {
-                case 'a': case 'A':
-                    code = 0x01; break;
-                case 'c': case 'C':
-                    code = 0x02; break;
-                case 'g': case 'G':
-                    code = 0x04; break;
-                case 't': case 'T':
-                    code = 0x08; break;
-                case '-': 
-                    code = 0x0E; break;
-                default: // 'N'
-                    code = 0x0F; break;
+        } else {
+            fpos += 10;
+            while (true) {
+                char c = *fpos;
+                if (c > ' ') {
+                    code = convert_chromosome_to_code(fpos);
+                    break;
+                } else if (c == '\0') {
+                    code = -1;
+                    break;
                 }
-                int pos = size_seq >> 1;
-                if ((size_seq & 1) == 0) {
-                    buffer[pos] = code << 4;
-                } else {
-                    buffer[pos] |= code;
-                }
-                size_seq++;
-                //buffer[pos] |= code << offset;
-                //offset = 4 - offset;
-                //buffer[size_seq++] = code;
+                fpos++;
             }
         }
+        return code;
     }
-    if (seq != NULL) {
-        chromosomes.push_back(seq);
+
+    map<int,pair<int,unsigned char*> > load_genome(const char* filename) throw (exception) {
+        map<int,pair<int,unsigned char*> > chromosomes;
+        ifstream fi(filename);
+        if (!fi.is_open()) {
+            throw invalid_argument("cannot open genome file");
+        }
+        size_t size_buffer = 300000000;
+        size_t size_seq = 0;
+        unsigned char* buffer = new unsigned char[size_buffer];
+        int chrmcode = -1;
+        size_t total = 0;
+        while (!fi.eof()) {
+            string line;
+            getline(fi, line);
+            if (line.c_str()[0] == '>') {
+                if (chrmcode > 0) {
+                    unsigned char* clone = new unsigned char[size_seq / 2 + 1];
+                    total += size_seq / 2 + 1;
+                    //cerr << chrmcode << ":" << size_seq / 2 << endl;
+                    for (int i = 0; i < size_seq; i+= 2) {
+                        clone[i >> 2] = (buffer[i] << 4) | (buffer[i+1]);
+                        // if (clone[i>>2] != 0xff) {
+                        //     cout << i << ":" << hex << (int)clone[i >> 2] << dec << endl;
+                        // }
+                    }
+                    chromosomes.insert(make_pair(chrmcode, make_pair(size_seq, clone)));
+#ifdef TEST
+                    chrmcode = -1;
+                    break;
+#endif
+                }
+                chrmcode = _get_chromosome_code(line.size() - 1, line.c_str() + 1);
+                size_seq = 0;
+            } else if (chrmcode > 0) {
+                const char* ptr = line.c_str();
+                for (int i = 0; i < (int)line.size(); i++) {
+                    unsigned char code;
+                    switch (ptr[i]) {
+                    case 'a': case 'A':
+                        code = 0x01; break;
+                    case 'c': case 'C':
+                        code = 0x02; break;
+                    case 'g': case 'G':
+                        code = 0x04; break;
+                    case 't': case 'T':
+                        code = 0x08; break;
+                    case '-': 
+                        code = 0x0E; break;
+                    case 'n': case 'N':
+                        code = 0x0f; break;
+                    default:
+                        code = 0; break;
+                    }
+                    if (code != 0) {
+                        buffer[size_seq++] = code;
+                    }
+                }
+            }
+        }
+        if (chrmcode > 0) {
+            total += size_seq / 2 + 1;
+            unsigned char* clone = new unsigned char[size_seq / 2 + 1];
+            for (int i = 0; i < size_seq; i+= 2) {
+                clone[i >> 2] = (buffer[i] << 4) | (buffer[i+1]);
+            }
+            chromosomes.insert(make_pair(chrmcode, make_pair(size_seq, clone)));
+        }
+        cout << total / 1000000 << endl;
+        // sleep(100);
+        // exit(0);
+        delete[] buffer;
+        fi.close();
+        return chromosomes;
     }
-    // if (chrmcode > 0) {
-    //     unsigned char* clone = new unsigned char[(size_seq >> 1) + 2];
-    //     for (int i = 0; i < size_seq; i+= 2) {
-    //         clone[i >> 2] = (buffer[i] << 4) | (buffer[i+1]);
-    //     }
-    //     chromosomes.insert(make_pair(chrmcode, make_pair(size_seq, clone)));
-    // }
-    delete[] buffer;
-    fi.close();
-    return chromosomes;
 }
 
+namespace {
+    class hetero_locus {
+    public:
+        int position;
+        int index1;
+        int index2;
+    public:
+        hetero_locus(int position, int index1, int index2) {
+            this->position = position;
+            this->index1 = index1;
+            this->index2 = index2;
+        }
+        hetero_locus(int position, const string& ref, const string& alt) {
+            this->position = position;
+            this->index1 = get_index(ref);
+            this->index2 = get_index(alt);
+        }
+        bool is_available() const {
+            return 0 <= index1 && index1 < 5 && 0 <= index2 && index2 < 5;
+        }
+    private:
+        static int get_index(const string& locus) {
+            if (locus == "A") {
+                return 0;
+            } else if (locus == "C") {
+                return 1;
+            } else if (locus == "G") {
+                return 2;
+            } else if (locus == "T") {
+                return 3;
+            } else if (locus == "." || locus == "-") {
+                return 4;
+            } else {
+                return -1;
+            }
+        }
+    };
+}
 
 namespace {
     bool compare_first_index(const pair<int,char>& lhs, const pair<int,char>& rhs) {
@@ -535,26 +530,21 @@ ostream& operator << (ostream& ost, const recfragment& rhs) {
 
 
 namespace {
-    vector<hetero_locus>
-    //    vector<pair<int,char> > 
+    vector<pair<int,char> > 
     scan_heterozygous_loci(vector<recfragment*>& fragments,
-                           chromosome_seq const* chromosome,
-                           //const string& chromosome_name,
-                           //int chromosome_length,
-                           //unsigned char const* chromosome_sequence,
+                           const string& chromosome_name,
+                           int chromosome_length,
+                           unsigned char const* chromosome_sequence,
                            int start, int end,
                            int minimum_coverage=10,
                            float hetero_threshold=0.2f) throw (exception) {
         //vector<recfragment*> bound = bundle_pairs(fragments);
         int freq[5];
-        vector<hetero_locus> candidates;
-        //vector<pair<int,char> > hetero_loci;
-        //int offset = (start & 1) != 0 ? 4 : 0;
-        //unsigned char const* ptr = chromosome->
+        vector<pair<int,char> > hetero_loci;
+        int offset = (start & 1) == 0 ? 4 : 0;
         for (int pos = start; pos < end; pos++) {
-            //unsigned char ref = (chromosome_sequence[pos >> 1]) >> offset;
-            unsigned char ref = chromosome->get_base_code(pos);//(chromosome_sequence[pos >> 1]) >> offset;
-            //offset = 4 - offset;
+            unsigned char ref = ((chromosome_sequence[pos >> 1]) >> offset) & 0xF;
+            offset = 4 - offset;
             int refid;
             switch (ref) {
             case 0x01: refid = 0; break;
@@ -601,32 +591,29 @@ namespace {
                         }
                     }
                     if (max_minor > 1) {
-                        candidates.push_back(hetero_locus(chromosome->code(), pos, refid, freq[refid], alt_index, altnum));
-                        //hetero_loci.push_back(make_pair(pos, _index2nucleotide[alt_index]));
+                        hetero_loci.push_back(make_pair(pos, _index2nucleotide[alt_index]));
 // SNP
                         // if (pos >= 4805000 && pos < 4812205) {
-                        //     cout << chromosome_name << ":" << pos << "\t" << ref << "\t" << _index2nucleotide[alt_index] << "\tA:" << freq[0] << " C:" << freq[1] << " G:" << freq[2] << " T:" << freq[3] << " -:" << freq[4] << " // " << hetero_loci.size() << endl;
+                        cout << chromosome_name << ":" << pos << "\t" << _bamnucleotide[ref] << "\t" << _index2nucleotide[alt_index] << "\tA:" << freq[0] << " C:" << freq[1] << " G:" << freq[2] << " T:" << freq[3] << " -:" << freq[4] << " // " << hetero_loci.size() << endl;
                         // }                        
                     }
                 }
             }
         }
-        return candidates;
+        return hetero_loci;
     }
 
     void detect_recombination(vector<recfragment*>& fragments,
-                              chromosome_seq const* chromosome,
-                              //const string& chromosome_name,
-                              //int chromosome_length,
-                              //unsigned char const* chromosome_sequence,
+                              const string& chromosome_name,
+                              int chromosome_length,
+                              unsigned char const* chromosome_sequence,
                               int start, int end,
                               int minimum_coverage=15,
                               float hetero_threshold=0.3f,
                               ostream& ost=cout) throw (exception) {
         // bind pairs
         recfragment::bundle_pairs(fragments);
-        //vector<pair<int,char> > hetero_loci = scan_heterozygous_loci(fragments, chromosome_name, chromosome_length, chromosome_sequence, start, end, minimum_coverage, hetero_threshold);
-        vector<hetero_locus> hetero_loci = scan_heterozygous_loci(fragments, chromosome, start, end, minimum_coverage, hetero_threshold);
+        vector<pair<int,char> > hetero_loci = scan_heterozygous_loci(fragments, chromosome_name, chromosome_length, chromosome_sequence, start, end, minimum_coverage, hetero_threshold);
         float diff_degree = 0.9f;
         bool displayed = false;
         for (int i = 0; i < (int)fragments.size(); i++) {
@@ -639,7 +626,7 @@ namespace {
                     displayed = true;
                 }
                 string pattern = fragments[i]->get_recombination_pattern(hetero_loci);
-                ost << "chr" << chromosome->name() << ":" << site.first << "-" << site.second << "\t" << pattern << "\t" << fragments[i]->name() << endl;
+                ost << "chr" << chromosome_name << ":" << site.first << "-" << site.second << "\t" << pattern << "\t" << fragments[i]->name() << endl;
             // } else {
             //     cout << "no_recombination";
             }
@@ -686,10 +673,9 @@ int main(int argc, char** argv) {
         if (verbose) {
             cerr << "loading genomic sequences " << flush;
         }
-        vector<chromosome_seq*> fasta_files = chromosome_seq::load_genome(filename_genome);
-//        map<int,pair<int,unsigned char*> >  genome = load_genome(filename_genome);
+        map<int,pair<int,unsigned char*> >  genome = load_genome(filename_genome);
         if (verbose) {
-            cerr << fasta_files.size() << " chromosomes\n";
+            cerr << genome.size() << " chromosomes\n";
         }
 
         bamfile = bam_open(filename, "rb");
@@ -721,13 +707,12 @@ retain_end
         int analysis_start = retain_start + window_margin;
         int analysis_end = retain_end - window_margin;
         int current_bamchrm = -1;
-        chromosome_seq const* chromosome = NULL;
         int current_chromosome = -1;
         int next_chromosome = -1;
-        //int chromosome_length = 0;
+        int chromosome_length = 0;
         string chromosome_name;
         size_t max_fragments = 10000;
-        //const unsigned char* chromosome_sequence = NULL;
+        const unsigned char* chromosome_sequence = NULL;
 
         while (bam_read1(bamfile, read) > 0) {
             bool processing = false;
@@ -739,7 +724,7 @@ retain_end
                 //    retain_end = read->core.pos + read->core.l_qseq * 2;
                 //}
                 const char* name = header->target_name[read->core.tid];
-                next_chromosome = chromosome_seq::get_chromosome_code(strlen(name), name);
+                next_chromosome = _get_chromosome_code(strlen(name), name);
             } else if (read->core.pos > retain_end) {
                 // process current region
                 if (fragments.size() > 0) {
@@ -749,15 +734,14 @@ retain_end
             //cout << fragments.size() << endl;
             if (processing) {
                 // analysis
-                if (fragments.size() > coverage && chromosome != NULL) {//chromosome_length > 0) {
+                if (fragments.size() > coverage && chromosome_length > 0) {
                     if (verbose) {
-                        cerr << " chr" << chromosome->name() << ":" << analysis_start << "-" << analysis_end << ":" << fragments.size() << "            \r";
+                        cerr << " chr" << chromosome_name << ":" << analysis_start << "-" << analysis_end << ":" << fragments.size() << "            \r";
                     }
                     if (fragments.size() >= max_fragments) {
-                        cerr << "skip chr" << chromosome->name() << ":" << analysis_start << "-" << analysis_end << " because of too much fragments " << fragments.size() << "       \n";
+                        cerr << "skip chr" << chromosome_name << ":" << analysis_start << "-" << analysis_end << " because of too much fragments " << fragments.size() << "       \n";
                     } else {
-                        detect_recombination(fragments, chromosome, analysis_start, analysis_end, coverage, heterozygosity, *ost);
-                        //detect_recombination(fragments, chromosome_name, chromosome_length, chromosome_sequence, analysis_start, analysis_end, coverage, heterozygosity, *ost);
+                        detect_recombination(fragments, chromosome_name, chromosome_length, chromosome_sequence, analysis_start, analysis_end, coverage, heterozygosity, *ost);
                         *ost << flush;
                     }
                 }
@@ -765,31 +749,19 @@ retain_end
                 // change chromosome
                 if (next_chromosome != current_chromosome) {
                     //cerr << "change chromosoe\n";
-                    //map<int, pair<int,unsigned char*> >::const_iterator _chrm = genome.find(next_chromosome);
-                    chromosome = NULL;
-                    for (int i = 0; i < (int)fasta_files.size(); i++) {
-                        if (fasta_files[i]->code() == next_chromosome) {
-                            chromosome = fasta_files[i];
-                            break;
-                        }
-                    }
-                    if (chromosome == NULL) {//_chrm == genome.end()) {
-                        //chromosome_sequence = NULL;
-                        //chromosome_length = 0;
-                        if (verbose) {
-                            cerr << "cannot find " << next_chromosome << endl;
-                        }
-                        current_chromosome = -1;
-                        // } else {
-                        //     chromosome_sequence = _chrm->second.second;
-                        //     chromosome_length = _chrm->second.first;
-                        //     chromosome_name = convert_code_to_chromosome(next_chromosome
-//                        );
-                        //cerr << "new chromosome " << chromosome_name << " // " << chromosome_length << endl;
+
+                    map<int, pair<int,unsigned char*> >::const_iterator _chrm = genome.find(next_chromosome);
+                    if (_chrm == genome.end()) {
+                        chromosome_sequence = NULL;
+                        chromosome_length = 0;
+                        cerr << "cannot find " << next_chromosome << endl;
                     } else {
-                        current_chromosome = next_chromosome;
+                        chromosome_sequence = _chrm->second.second;
+                        chromosome_length = _chrm->second.first;
+                        chromosome_name = convert_code_to_chromosome(next_chromosome);
+                        //cerr << "new chromosome " << chromosome_name << " // " << chromosome_length << endl;
                     }
-                    
+
                     retain_start = 0;
                     analysis_start = 0;
                     analysis_end = window_size - window_margin;
@@ -839,9 +811,8 @@ retain_end
         }
 
         // process remaining
-        if (fragments.size() > coverage && chromosome != NULL) {
-            detect_recombination(fragments, chromosome, analysis_start, analysis_end, coverage, heterozygosity, *ost);
-            //detect_recombination(fragments, chromosome_name, chromosome_length, chromosome_sequence, analysis_start, analysis_end, coverage, heterozygosity, *ost);
+        if (fragments.size() > coverage && chromosome_length > 0) {
+            detect_recombination(fragments, chromosome_name, chromosome_length, chromosome_sequence, analysis_start, analysis_end, coverage, heterozygosity, *ost);
         }
 
 
@@ -856,12 +827,9 @@ retain_end
             delete *it;
         }
         // clean up sequences
-        for (vector<chromosome_seq*>::iterator it = fasta_files.begin(); it != fasta_files.end(); it++) {
-            delete *it;
+        for (map<int, pair<int,unsigned char*> >::iterator it = genome.begin(); it != genome.end(); it++) {
+            delete[] it->second.second;
         }
-        // for (map<int, pair<int,unsigned char*> >::iterator it = genome.begin(); it != genome.end(); it++) {
-        //     delete[] it->second.second;
-        // }
 
         // clean up BAM
         bam_destroy1(read);

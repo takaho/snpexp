@@ -17,22 +17,11 @@ namespace tkbio {
     public:
         int _chromosome;
         int _position;
-        unsigned char _reference;
-        unsigned char _alt;
+        int _reference;
+        int _alt;
         int _refcount;
         int _altcount;
-        // int position;
-        // int index1;
-        // int index2;
-        // int count1;
-        // int count2;
     public:
-        // hetero_locus(int position, int index1, int index2) {
-        //     this->position = position;
-        //     this->index1 = index1;
-        //     this->index2 = index2;
-        //     this->count1 = this->count2 = 0;
-        // }
         hetero_locus(int chromosome, int position, unsigned char reference, int reference_count, unsigned char alt, int alt_count) {
             this->_chromosome = chromosome;
             this->_position = position;
@@ -46,37 +35,16 @@ namespace tkbio {
         string chromosome() const;
         int count_alt() const { return _altcount; }
         int count_ref() const { return _refcount; }
-        unsigned char get_ref() const { return _reference; }
-        unsigned char get_alt() const { return _alt; }
+        int get_ref() const { return _reference; }
+        int get_alt() const { return _alt; }
         char ref() const { return "ACGT-"[_reference]; }
         char alt() const { return "ACGT-"[_reference]; }
         string to_string() const;
-        // hetero_locus(int position, const string& ref, const string& alt) {
-        //     this->position = position;
-        //     this->index1 = get_index(ref);
-        //     this->index2 = get_index(alt);
-        // }
         bool is_available() const {
             // return 0 <= index1 && index1 < 5 && 0 <= index2 && index2 < 5;
             return _refcount > 0 && _altcount > 0 && _reference < 5 && _altcount < 5;
         }
         friend class recfragment;
-    // public:
-    //     static int get_index(const string& locus) {
-    //         if (locus == "A") {
-    //             return 0;
-    //         } else if (locus == "C") {
-    //             return 1;
-    //         } else if (locus == "G") {
-    //             return 2;
-    //         } else if (locus == "T") {
-    //             return 3;
-    //         } else if (locus == "." || locus == "-") {
-    //             return 4;
-    //         } else {
-    //             return -1;
-    //         }
-    //     }
     };
 
     class chromosome_seq {
