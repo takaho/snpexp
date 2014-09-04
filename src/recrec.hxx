@@ -8,6 +8,11 @@
 //using namespace std;
 using std::string;
 using std::ostream;
+using std::vector;
+using std::pair;
+using std::exception;
+using std::invalid_argument;
+using std::runtime_error;
 
 typedef unsigned int uint;
 namespace tkbio {
