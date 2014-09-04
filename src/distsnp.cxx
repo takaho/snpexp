@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <sstream>
 #include <fstream>
+#include <cstdlib>
 
 #ifndef HAVE_BAM_H
 #error You do not have bam library
@@ -30,6 +31,7 @@ using std::exception;
 using std::invalid_argument;
 using std::runtime_error;
 using std::pair;
+using std::atoi;
 
 using namespace tkbio;
 
@@ -136,13 +138,13 @@ dbsnp_file* dbsnp_file::load_dbsnp(const char* filename) throw (exception) {
     if (fi.is_open() == false) {
         throw invalid_argument("cannot open VCF file");
     }
-    dbsnp_file* snpfile = new dbsnp_file();//NULL;
+    dbsnp_file* snpfile = NULL;//new dbsnp_file(filename);//NULL;
     size_t next_position = 0;
     size_t interval = 10000;
     string prev_chrom = "";
     while (!fi.eof()) {
         string line;
-        size_t fpos = fi.tell();
+        size_t fpos = fi.tellg();
         getline(fi, line);
         if (snpfile == NULL) {//strains.size() == 0) {
             if (line.find("#CHROM") == 0) {
@@ -162,9 +164,9 @@ dbsnp_file* dbsnp_file::load_dbsnp(const char* filename) throw (exception) {
                 if (chrom != prev_chrom) {
                     next_position = 0;
                 }
-                size_t position = atoi(items[1]);
+                size_t position = std::atoi(items[1].c_str());
                 if (position >= next_position) {
-                    snpfile->add_cache(new cache_position(chrom, position, fpos));
+                    snpfile->add_cache(chrom, position, fpos);//new cache_position(chrom, position, fpos));
                     next_position += interval;
                 }
             }
