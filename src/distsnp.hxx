@@ -64,6 +64,7 @@ namespace tkbio {
         static string get_cache_filename(const char* filename);
         void save_cache(const char* filename) const throw (exception);
         static dbsnp_file* load_cache(const char* filename) throw (exception);
+        void add_cache(const string& chromosome, size_t pos, size_t fpos);
     public:
         dbsnp_file(const char* filename, const vector<string>& strains);
         ~dbsnp_file();
