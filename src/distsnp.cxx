@@ -117,7 +117,7 @@ void dbsnp_file::save_cache(const char* filename) const throw (exception) {
         fo.write(reinterpret_cast<char const*>(&slen), sizeof(int));
         fo.write(it->first.c_str(), sizeof(char) * (slen + 1));
         fo.write(reinterpret_cast<char const*>(&location), sizeof(size_t));
-        fo.write(it->
+        //fo.write(it->
         location += sizeof(size_t) * 2;
     }
     
