@@ -39,10 +39,11 @@ using tktools::split_items;
 using tktools::bio::convert_chromosome_to_code;
 using tktools::bio::convert_code_to_chromosome;
 
-//#define TEST 1
+#define TEST 1
 
-recfragment::recfragment(int chromosome, bam1_t* seq) {
+recfragment::recfragment(int chromosome, bam1_t* seq, int num) {
     _chromosome = chromosome;
+    _group = num;
     initialize(seq);
 }
 
@@ -278,8 +279,8 @@ vector<recpattern> recfragment::get_recombination_borders(const vector<hetero_lo
 
 recpattern::Genotype recfragment::get_recombination_pattern(int pos5, int pos3, int minimum_span) const {
     recpattern::Genotype genotype = recpattern::UNDETERMINED;
-    int index5 = 0;
-    int index3 = 0;
+    //int index5 = 0;
+    //int index3 = 0;
     
     // for (; index5 >= 0; index5--) {
     // }
@@ -588,8 +589,10 @@ void recfragment::bundle_pairs(vector<recfragment*>& fragments) throw (runtime_e
         for (int j = i + 1; j < (int)fragments.size(); j++) {
             recfragment* q = fragments[j];
             if (q == NULL) continue;
-            if (p->name() == q->name()) {
+            if (p->_group == q->_group && p->name() == q->name()) {
+                cout << "JOIN:" << p->to_string() << " + " << q->to_string();
                 p->join_sequence(q);
+                cout << " => " << p->to_string() << endl;
                 delete q;
                 fragments[j] = NULL;
                 break;
@@ -607,6 +610,13 @@ void recfragment::bundle_pairs(vector<recfragment*>& fragments) throw (runtime_e
     }
     fragments.erase(fragments.begin() + tail, fragments.end());
 }
+
+string recfragment::to_string() const {
+    stringstream ss;
+    ss << _group << ":" << chromosome() << ":" << position5() << "-" << position3();
+    return ss.str();
+}
+
 
 ostream& operator << (ostream& ost, const recfragment& rhs) {
     ost << rhs.name() << " ; " << rhs.chromosome() << ":" << rhs.orientation() << ":" << rhs.position5() << "-" << rhs.position3() << " ";

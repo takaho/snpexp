@@ -125,6 +125,7 @@ namespace tkbio {
         string _name;     // name of the read
         string _sequence; // read sequence
         string _cigar;    // CIGAR
+        int _group;       // number to distinguish multiple bams
         int _chromosome;  // chromosome coded by tktools
         int _position;    // chromosomal position
         int _flag;        // SAM file flag
@@ -150,11 +151,12 @@ namespace tkbio {
     public:
         //recfragment(const string& chromosome, int position, int flag, const string& sequence, const string& cigar);
         // constructor with a BAM read
-        recfragment(int chromosome, bam1_t* sequence);
+        recfragment(int chromosome, bam1_t* sequence, int group=0);
 
         // properties
         const string& name() const { return _name; }
         int chromosome() const { return _chromosome; }
+        int group() const { return _group; }
         int position() const { return _position; }
         int span() const { return _position3 - _position5 + 1; }
         int position5() const { return _position5; }
@@ -166,6 +168,7 @@ namespace tkbio {
         char get_base(int position, int& count) const;
         int get_base_id(int position, int& count) const;
         void test_heterozygosity(int num, char const* reference, char* const alt, int* result) const;
+        string to_string() const;
 
         // recombination test
         string get_recombination_pattern(const vector<hetero_locus>& loci) const;
