@@ -99,6 +99,27 @@ namespace tkbio {
         friend class recfragment;
     };
 
+    class recpattern {
+    public:
+        typedef enum Genotype {REF_REF=0, REF_ALT=1, ALT_REF=2, ALT_ALT=3, UNDETERMINED=-1} Genotype;
+    private:
+        int _position5;
+        int _position3;
+        int _score;
+        Genotype _genotype;
+    public:
+        recpattern(int pos5, int pos3, Genotype gt, int score=0) {
+            _position5 = pos5;
+            _position3 = pos3;
+            _genotype = gt;
+            _score = score;
+        }
+        Genotype genotype() const { return _genotype; }
+        int position5() const { return _position5; }
+        int position3() const { return _position3; }
+        int score() const { return _score; }
+    };
+
     ///// sequence read to detect recombination
     class recfragment {
         string _name;     // name of the read
@@ -148,6 +169,8 @@ namespace tkbio {
 
         // recombination test
         string get_recombination_pattern(const vector<hetero_locus>& loci) const;
+        vector<recpattern> get_recombination_borders(const vector<hetero_locus>& loci, int minimum_span=2) const;
+        recpattern::Genotype get_recombination_pattern(int pos5, int pos3, int minimum_span=2) const;
         pair<int,int> get_recombination(const vector<hetero_locus>& loci, float diff_ratio=0.0) const;
 
         // join pairs

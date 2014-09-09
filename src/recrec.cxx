@@ -223,6 +223,71 @@ void recfragment::generate_recombination_pattern(const vector<hetero_locus>& loc
     }
 }
 
+vector<recpattern> recfragment::get_recombination_borders(const vector<hetero_locus>& loci, int minimum_span) const {
+    vector<recpattern> borders;
+    int size = loci.size();
+    int* buffer = new int[size];
+    generate_recombination_pattern(loci, buffer);
+    int i = 0;
+    while (i < size) {
+        //for (int i = 0; i < size; i++) {
+        int num_cont = 1;
+        int gt = buffer[i];
+        int last = size;
+        if (gt != 0) {
+            num_cont = 1;
+        } else {
+            continue;
+        }
+        for (int j = last; j < size; j++) {
+            int gj = buffer[j];
+            if (gj == 0) continue;
+            if (gj == gt) {
+                last = j;
+                num_cont ++;
+            } else {
+                break;
+            }
+        }
+        if (num_cont >= minimum_span) {
+            int num_cont2 = 0;
+            for (int j = last; j < size; j++) {
+                int gj = buffer[j];
+                if (gj == 0) continue;
+                if (gj != gt) {
+                    num_cont2 ++;
+                } else {
+                    break;
+                }
+            }
+            if (num_cont2 >= minimum_span) {
+                recpattern::Genotype genotype;
+                if (gt == 1) {
+                    genotype = recpattern::REF_ALT;
+                } else {
+                    genotype = recpattern::ALT_REF;
+                }
+                borders.push_back(recpattern(loci[i].position(), loci[i+1].position(), genotype, num_cont - num_cont2));
+            }
+        }
+        i = last;
+    }
+    delete[] buffer;
+    return borders;
+}
+
+recpattern::Genotype recfragment::get_recombination_pattern(int pos5, int pos3, int minimum_span) const {
+    recpattern::Genotype genotype = recpattern::UNDETERMINED;
+    int index5 = 0;
+    int index3 = 0;
+    
+    // for (; index5 >= 0; index5--) {
+    // }
+    // for (; index3 < size; index3++) {
+    // }
+    return genotype;
+}
+
 pair<int,int> recfragment::get_recombination(const vector<hetero_locus>& loci, float diff_ratio) const {
     const int minimum_diff = 2;
     int size = loci.size();
