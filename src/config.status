@@ -652,7 +652,7 @@ S["AUTOHEADER"]="${SHELL} /Users/takaho/Projects/C++/SnpExp/src/missing --run au
 S["AUTOMAKE"]="${SHELL} /Users/takaho/Projects/C++/SnpExp/src/missing --run automake-1.11"
 S["AUTOCONF"]="${SHELL} /Users/takaho/Projects/C++/SnpExp/src/missing --run autoconf"
 S["ACLOCAL"]="${SHELL} /Users/takaho/Projects/C++/SnpExp/src/missing --run aclocal-1.11"
-S["VERSION"]="0.2.0"
+S["VERSION"]="0.3.0"
 S["PACKAGE"]="snpexp"
 S["CYGPATH_W"]="echo"
 S["am__isrc"]=""
@@ -667,7 +667,7 @@ S["ECHO_T"]=""
 S["ECHO_N"]=""
 S["ECHO_C"]="\\c"
 S["DEFS"]="-DPACKAGE_NAME=\\\"\\\" -DPACKAGE_TARNAME=\\\"\\\" -DPACKAGE_VERSION=\\\"\\\" -DPACKAGE_STRING=\\\"\\\" -DPACKAGE_BUGREPORT=\\\"\\\" -DPACKAGE_URL=\\\"\\\" -DPACKAGE=\\\"snpe"\
-"xp\\\" -DVERSION=\\\"0.2.0\\\" -DSTDC_HEADERS=1 -DHAVE_SYS_TYPES_H=1 -DHAVE_SYS_STAT_H=1 -DHAVE_STDLIB_H=1 -DHAVE_STRING_H=1 -DHAVE_MEMORY_H=1 -DHAVE_STRI"\
+"xp\\\" -DVERSION=\\\"0.3.0\\\" -DSTDC_HEADERS=1 -DHAVE_SYS_TYPES_H=1 -DHAVE_SYS_STAT_H=1 -DHAVE_STDLIB_H=1 -DHAVE_STRING_H=1 -DHAVE_MEMORY_H=1 -DHAVE_STRI"\
 "NGS_H=1 -DHAVE_INTTYPES_H=1 -DHAVE_STDINT_H=1 -DHAVE_UNISTD_H=1 -DHAVE_ZLIB_H=1 -DHAVE_BAM_H=1 -DSIZEOF_VOIDP=8 -DSIZEOF_INT=4 -DHAVE_BAM_H=1"
 S["mandir"]="${datarootdir}/man"
 S["localedir"]="${datarootdir}/locale"
