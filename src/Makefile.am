@@ -1,10 +1,9 @@
-bin_PROGRAMS = snpexp trimvcf recrec distsnp
+bin_PROGRAMS = snpexp trimvcf recrec 
 #managevcf_SOURCES = managevcf.cxxtktools.hxx tktools.cxx 
-distsnp_SOURCES = distsnp.cxx dstsnp.hxx recrec.cxx recrec.hxx tktools.hxx tktools.cxx 
-recrec_SOURCES = recrec.cxx recrec.hxx tktools.hxx tktools.cxx gtf.hxx gtf.cxx main_recrec.cxx
+recrec_SOURCES = recrec.cxx recrec.hxx tktools.hxx tktools.cxx gtf.hxx gtf.cxx main.cxx fragmentprocessor.hxx fragmentprocessor.cxx distsnp.cxx dstsnp.hxx
 snpexp_SOURCES = snpexp.cxx snpexp.hxx tktools.hxx tktools.cxx gtf.hxx gtf.cxx 
 trimvcf_SOURCES = trimvcf.hxx trimvcf.cxx gtf.hxx gtf.cxx tktools.hxx tktools.cxx
 CXX = c++
-AM_CXXFLAGS = -g -pedantic -Wall -Wno-long-long -m64 -I/usr/local/include
+AM_CXXFLAGS = -O3 -pedantic -Wall -Wno-long-long -m64 -I/usr/local/include
 AM_LDFLAGS = -L/usr/local/lib
 LIBS = -lz -lbam

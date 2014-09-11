@@ -39,7 +39,7 @@ using tktools::split_items;
 using tktools::bio::convert_chromosome_to_code;
 using tktools::bio::convert_code_to_chromosome;
 
-#define TEST 1
+//#define TEST 1
 
 recfragment::recfragment(int chromosome, bam1_t* seq, int num) {
     _chromosome = chromosome;
@@ -578,29 +578,52 @@ void recfragment::join_sequence(const recfragment* frag) {
     }
     _position3 = _position3 > frag->_position3 ? _position3 : frag->_position3;
     _position5 = _position5 < frag->_position5 ? _position5 : frag->_position5;
+    _flag |= FLAG_JOINED;
 }
 
+
+bool recfragment::compare_fragment_order(const recfragment* lhs, 
+                                         const recfragment* rhs) {
+    if (lhs->_group != rhs->_group) {
+        return lhs->_group < rhs->_group;
+    } else {
+        return lhs->_position5 < rhs->_position5;
+    }
+}
+
+const int recfragment::FLAG_JOINED = 0x8000;
 
 void recfragment::bundle_pairs(vector<recfragment*>& fragments) throw (runtime_error) {
     //vector<recfragment*> bundled;
     for (int i = 0; i < (int)fragments.size(); i++) {
+        if (fragments[i] == NULL) {
+            cerr << "null fragment at " << i << endl;
+            return;
+        }
+    }
+    sort(fragments.begin(), fragments.end(), compare_fragment_order);
+    int N = fragments.size();
+    for (int i = 0; i < N; i++) {
         recfragment* p = fragments[i];
-        if (p == NULL) continue;
-        for (int j = i + 1; j < (int)fragments.size(); j++) {
+        if (p == NULL || p->is_compound()) continue;
+        for (int j = i + 1; j < N; j++) {
             recfragment* q = fragments[j];
             if (q == NULL) continue;
-            if (p->_group == q->_group && p->name() == q->name()) {
-                cout << "JOIN:" << p->to_string() << " + " << q->to_string();
-                p->join_sequence(q);
-                cout << " => " << p->to_string() << endl;
-                delete q;
-                fragments[j] = NULL;
-                break;
+            if (p->_group != q->_group) {
+                if (p->_group == q->_group && p->name() == q->name()) {
+                    //cout << "JOIN:" << p->to_string() << " + " << q->to_string();
+                    p->join_sequence(q);
+                    //cout << " => " << p->to_string() << endl;
+                    delete q;
+                    fragments[j] = NULL;
+                    break;
+                }
             }
         }
     }
+
     int tail = 0;
-    for (int i = 0; i < (int)fragments.size(); i++) {
+    for (int i = 0; i < N; i++) {
         recfragment* p = fragments[i];
         if (p != NULL) {
             if (i != tail) {

@@ -32,8 +32,7 @@ POST_INSTALL = :
 NORMAL_UNINSTALL = :
 PRE_UNINSTALL = :
 POST_UNINSTALL = :
-bin_PROGRAMS = snpexp$(EXEEXT) trimvcf$(EXEEXT) recrec$(EXEEXT) \
-	distsnp$(EXEEXT)
+bin_PROGRAMS = snpexp$(EXEEXT) trimvcf$(EXEEXT) recrec$(EXEEXT)
 subdir = .
 DIST_COMMON = README $(am__configure_deps) $(srcdir)/Makefile.am \
 	$(srcdir)/Makefile.in $(top_srcdir)/configure AUTHORS COPYING \
@@ -49,12 +48,8 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_distsnp_OBJECTS = distsnp.$(OBJEXT) recrec.$(OBJEXT) \
-	tktools.$(OBJEXT)
-distsnp_OBJECTS = $(am_distsnp_OBJECTS)
-distsnp_LDADD = $(LDADD)
 am_recrec_OBJECTS = recrec.$(OBJEXT) tktools.$(OBJEXT) gtf.$(OBJEXT) \
-	main_recrec.$(OBJEXT)
+	main.$(OBJEXT) fragmentprocessor.$(OBJEXT) distsnp.$(OBJEXT)
 recrec_OBJECTS = $(am_recrec_OBJECTS)
 recrec_LDADD = $(LDADD)
 am_snpexp_OBJECTS = snpexp.$(OBJEXT) tktools.$(OBJEXT) gtf.$(OBJEXT)
@@ -76,10 +71,8 @@ COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
 CCLD = $(CC)
 LINK = $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
-SOURCES = $(distsnp_SOURCES) $(recrec_SOURCES) $(snpexp_SOURCES) \
-	$(trimvcf_SOURCES)
-DIST_SOURCES = $(distsnp_SOURCES) $(recrec_SOURCES) $(snpexp_SOURCES) \
-	$(trimvcf_SOURCES)
+SOURCES = $(recrec_SOURCES) $(snpexp_SOURCES) $(trimvcf_SOURCES)
+DIST_SOURCES = $(recrec_SOURCES) $(snpexp_SOURCES) $(trimvcf_SOURCES)
 ETAGS = etags
 CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
@@ -184,11 +177,10 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 #managevcf_SOURCES = managevcf.cxxtktools.hxx tktools.cxx 
-distsnp_SOURCES = distsnp.cxx dstsnp.hxx recrec.cxx recrec.hxx tktools.hxx tktools.cxx 
-recrec_SOURCES = recrec.cxx recrec.hxx tktools.hxx tktools.cxx gtf.hxx gtf.cxx main_recrec.cxx
+recrec_SOURCES = recrec.cxx recrec.hxx tktools.hxx tktools.cxx gtf.hxx gtf.cxx main.cxx fragmentprocessor.hxx fragmentprocessor.cxx distsnp.cxx dstsnp.hxx
 snpexp_SOURCES = snpexp.cxx snpexp.hxx tktools.hxx tktools.cxx gtf.hxx gtf.cxx 
 trimvcf_SOURCES = trimvcf.hxx trimvcf.cxx gtf.hxx gtf.cxx tktools.hxx tktools.cxx
-AM_CXXFLAGS = -g -pedantic -Wall -Wno-long-long -m64 -I/usr/local/include
+AM_CXXFLAGS = -O3 -pedantic -Wall -Wno-long-long -m64 -I/usr/local/include
 AM_LDFLAGS = -L/usr/local/lib
 all: all-am
 
@@ -265,9 +257,6 @@ uninstall-binPROGRAMS:
 
 clean-binPROGRAMS:
 	-test -z "$(bin_PROGRAMS)" || rm -f $(bin_PROGRAMS)
-distsnp$(EXEEXT): $(distsnp_OBJECTS) $(distsnp_DEPENDENCIES) 
-	@rm -f distsnp$(EXEEXT)
-	$(CXXLINK) $(distsnp_OBJECTS) $(distsnp_LDADD) $(LIBS)
 recrec$(EXEEXT): $(recrec_OBJECTS) $(recrec_DEPENDENCIES) 
 	@rm -f recrec$(EXEEXT)
 	$(CXXLINK) $(recrec_OBJECTS) $(recrec_LDADD) $(LIBS)
@@ -285,8 +274,9 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/distsnp.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/fragmentprocessor.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/gtf.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/main_recrec.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/main.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/recrec.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/snpexp.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/tktools.Po@am__quote@

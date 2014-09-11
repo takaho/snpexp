@@ -138,6 +138,7 @@ namespace tkbio {
         recfragment();
         const recfragment& operator = (const recfragment&);
         recfragment(const recfragment& rhs);
+        static const int FLAG_JOINED;
 
         // initializers
         void initialize(int position, const string& sequence, const string& cigar);
@@ -163,7 +164,7 @@ namespace tkbio {
         int position3() const { return _position3; }
         bool is_temporary() const {return _cigar == "";}
         char orientation() const { return (_flag & 16) == 0 ? '+' : '-'; }
-
+        bool is_compound() const { return _flag & FLAG_JOINED; }
         // getters
         char get_base(int position, int& count) const;
         int get_base_id(int position, int& count) const;
@@ -183,6 +184,10 @@ namespace tkbio {
         static void detect_recombination(const vector<recfragment*>& frags,
                                          int clength, char const* cseq,
                                          int start, int end) throw (exception);
+
+        // comparator
+        static bool compare_fragment_order(const recfragment* lhs, 
+                                           const recfragment* rhs);
     };
 
 }

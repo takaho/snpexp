@@ -26,6 +26,7 @@ namespace tkbio {
             this->file_position = file_pos;
             
         }
+
         int compare_position(const string& chromosome, size_t location, size_t file_pos) {
             if (this->chromosome < chromosome) {
                 return -1;
@@ -51,8 +52,10 @@ namespace tkbio {
     public:
         dbsnp_locus(size_t position, string reference, string alternative, int num_strains=1);
         ~dbsnp_locus();
-        void set_strain(int index, const char* info);
+        void set_genotype(int strain_index, char const* info);
         friend class dbsnp_file;
+        string to_string() const;
+        string to_string(const string& chromosome) const;
     };
 
     class dbsnp_file {
@@ -65,15 +68,17 @@ namespace tkbio {
         void save_cache(const char* filename) const throw (exception);
         static dbsnp_file* load_cache(const char* filename) throw (exception);
         void add_cache(const string& chromosome, size_t pos, size_t fpos);
+        void load_snps(const string& chromosome, int start, int end);
     public:
         dbsnp_file(const char* filename, const vector<string>& strains);
         ~dbsnp_file();
         int strain_number() const { return _strains.size(); }
-        vector<dbsnp_locus*> load_snps(const string& chromosome, int start, int end) throw (exception);
+        const string& get_strain(int index) const { return _strains[index]; }
+        vector<dbsnp_locus const*> get_snps(const string& chromosome, int start, int end) const throw (exception);
         void add_file_position(const string& chrom, size_t pos, size_t fpos) {
             _indicators.push_back(new cache_position(chrom, pos, fpos));
         }
-        static dbsnp_file* load_dbsnp(const char* filename) throw (exception);
+        static dbsnp_file* load_dbsnp(const char* filename, bool force_uncached=false) throw (exception);
     };
 
     // class snp_result {
