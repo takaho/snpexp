@@ -75,7 +75,7 @@ namespace tkbio {
         ~dbsnp_file();
         int strain_number() const { return _strains.size(); }
         const string& get_strain(int index) const { return _strains[index]; }
-        vector<dbsnp_locus const*> get_snps(const string& chromosome, int start, int end) const throw (exception);
+        vector<dbsnp_locus const*> get_snps(string chromosome, int start, int end) const throw (exception);
         void add_file_position(const string& chrom, size_t pos, size_t fpos) {
             _indicators.push_back(new cache_position(chrom, pos, fpos));
         }

@@ -101,6 +101,10 @@ namespace {
     }
 }
 
+namespace {
+    const unsigned char QUAL_GAP = 10;
+}
+
 void recfragment::initialize(bam1_t* read) {
     const uint32_t* cigar = bam1_cigar(read);
     const uint8_t* sequence = bam1_seq(read);
@@ -117,6 +121,7 @@ void recfragment::initialize(bam1_t* read) {
     delete[] buffer;
     _max_match_span = 0;
     _position = _position5 = spos;
+    uint8_t* qptr = bam1_qual(read);
     for (int i = 0; i < len; i++) {
         int op = bam_cigar_op(cigar[i]);
         int slen = bam_cigar_oplen(cigar[i]);
@@ -126,8 +131,10 @@ void recfragment::initialize(bam1_t* read) {
             }
             for (int j = 0; j < slen; j++) {
                 uint8_t base = (sequence[fpos >> 1] >> offset) & 15;
+                unsigned char qual = qptr[fpos];
                 offset = 4 - offset;
-                _mapped.push_back(make_pair(spos, _bamnucleotide[base]));
+                _mapped.push_back(qseqbase(spos, _bamnucleotide[base], qual));
+                //_mapped.push_back(make_pair(spos, _bamnucleotide[base]));
                 spos++;
                 fpos++;
             }
@@ -138,7 +145,8 @@ void recfragment::initialize(bam1_t* read) {
             }
         } else if (op == BAM_CDEL) { // D
             for (int j = 0; j < slen; j++) {
-                _mapped.push_back(make_pair(spos + j, '-'));
+                _mapped.push_back(qseqbase(spos + j, '-', QUAL_GAP));
+//make_pair(spos + j, '-'));
             }
             spos += slen;
         } else if (op == BAM_CSOFT_CLIP || op == BAM_CHARD_CLIP) { // S or H
@@ -153,22 +161,56 @@ void recfragment::initialize(bam1_t* read) {
     _flag = read->core.flag;
 }
 
+char recfragment::get_base(int pos, unsigned char qual_threshold, int& count) const {
+    int left = 0;
+    int size = _mapped.size();
+    int right = size;
+    for (;;) {
+        int center = (left + right) / 2;
+        const qseqbase& p = _mapped[center];
+        if (p.position() < pos) {
+            left = center + 1;
+        } else if (p.position() > pos) {
+            right = center;
+        } else {
+            count = 1;
+            for (int i = center - 1; i <= center + 1; i++) {
+                if (i >= 0 && i < size) {
+                    const qseqbase& qb = _mapped[i];
+                    if (qb.position() == pos && qb.quality() >= qual_threshold) {
+                        count++;
+                    }
+                }
+            }
+            if (count > 0) {
+                return p.nucleotide();
+            } else {
+                return '\0';
+            }
+        }
+        if (left == right) {
+            count = 0;
+            return '\0';
+        }
+    }
+}
+
 char recfragment::get_base(int pos, int& count) const {
     int left = 0;
     int size = _mapped.size();
     int right = size;
     for (;;) {
         int center = (left + right) / 2;
-        const pair<int,char>& p = _mapped[center];
-        if (p.first < pos) {
+        const qseqbase& p = _mapped[center];
+        if (p.position() < pos) {
             left = center + 1;
-        } else if (p.first > pos) {
+        } else if (p.position() > pos) {
             right = center;
         } else {
             count = 1;
-            if (center > 0 && _mapped[center - 1].first == pos) count++;
-            if (center < size - 1 && _mapped[center + 1].first == pos) count++;
-            return p.second;
+            if (center > 0 && _mapped[center - 1].position() == pos) count++;
+            if (center < size - 1 && _mapped[center + 1].position() == pos) count++;
+            return p.nucleotide();
         }
         if (left == right) {
             count = 0;
@@ -197,20 +239,38 @@ int recfragment::get_base_id(int pos, int& count) const {
     }
 }
 
-void recfragment::generate_recombination_pattern(const vector<hetero_locus>& loci, int* pattern) const {
+int recfragment::get_base_id(int pos, unsigned char threshold, int& count) const {
+    char base = get_base(pos, threshold, count);
+    if (base == 'A') {
+        return 0;
+    } else if (base == 'C') {
+        return 1;
+    } else if (base == 'G') {
+        return 2;
+    } else if (base == 'T') {
+        return 3;
+    } else if (base == '-') {
+        count = 1;
+        return 4;
+    } else {
+        return -1;
+    }
+}
+
+void recfragment::generate_recombination_pattern(const vector<hetero_locus*>& loci, int* pattern) const {
     int index = 0;
     for (int i = 0; i < (int)loci.size(); i++) {
-        int pos = loci[i].position();
-        char ref = loci[i].ref();//second;
-        char alt = loci[i].alt();
+        int pos = loci[i]->position();
+        char ref = loci[i]->ref();//second;
+        char alt = loci[i]->alt();
         int value = 0;
         while (index < (int)_mapped.size()) {
-            const pair<int,char>& locus = _mapped[index];
-            if (locus.first > pos) break;
-            if (locus.first == pos) {
-                if (locus.second == ref) {
+            const qseqbase& locus = _mapped[index];
+            if (locus.position() > pos) break;
+            if (locus.position() == pos) {
+                if (locus.nucleotide() == ref) {
                     value = 1;
-                } else if (locus.second == alt) {
+                } else if (locus.nucleotide() == alt) {
                     value = -1;
                 } else {
                     value = 0;
@@ -224,7 +284,7 @@ void recfragment::generate_recombination_pattern(const vector<hetero_locus>& loc
     }
 }
 
-vector<recpattern> recfragment::get_recombination_borders(const vector<hetero_locus>& loci, int minimum_span) const {
+vector<recpattern> recfragment::get_recombination_borders(const vector<hetero_locus*>& loci, int minimum_span) const {
     vector<recpattern> borders;
     int size = loci.size();
     int* buffer = new int[size];
@@ -268,7 +328,7 @@ vector<recpattern> recfragment::get_recombination_borders(const vector<hetero_lo
                 } else {
                     genotype = recpattern::ALT_REF;
                 }
-                borders.push_back(recpattern(loci[i].position(), loci[i+1].position(), genotype, num_cont - num_cont2));
+                borders.push_back(recpattern(loci[i]->position(), loci[i+1]->position(), genotype, num_cont - num_cont2));
             }
         }
         i = last;
@@ -289,7 +349,7 @@ recpattern::Genotype recfragment::get_recombination_pattern(int pos5, int pos3, 
     return genotype;
 }
 
-pair<int,int> recfragment::get_recombination(const vector<hetero_locus>& loci, float diff_ratio) const {
+pair<int,int> recfragment::get_recombination(const vector<hetero_locus*>& loci, float diff_ratio) const {
     const int minimum_diff = 2;
     int size = loci.size();
     int* buffer = new int[size];
@@ -321,7 +381,7 @@ pair<int,int> recfragment::get_recombination(const vector<hetero_locus>& loci, f
                             && abs(right_score) >= minimum_diff) {
                             max_diff = diff;
                             max_index = index;
-                            border = make_pair(loci[index].position(), loci[j].position());
+                            border = make_pair(loci[index]->position(), loci[j]->position());
                         }
                     }
                     found = true;
@@ -339,7 +399,7 @@ pair<int,int> recfragment::get_recombination(const vector<hetero_locus>& loci, f
 }
 
 //string recfragment::get_recombination_pattern(const vector<pair<int,char> >& loci) const {
-string recfragment::get_recombination_pattern(const vector<hetero_locus>& loci) const {
+string recfragment::get_recombination_pattern(const vector<hetero_locus*>& loci) const {
     int size = loci.size();
     int* buffer = new int[size];
     char* pat = new char[size + 1];
@@ -551,24 +611,25 @@ vector<chromosome_seq*> chromosome_seq::load_genome(const char* filename) throw 
 }
 
 
-namespace {
-    bool compare_first_index(const pair<int,char>& lhs, const pair<int,char>& rhs) {
-        return lhs.first < rhs.first;
-    }
-}
+// namespace {
+//     bool compare_first_index(const pair<int,char>& lhs, const pair<int,char>& rhs) {
+//         return lhs.first < rhs.first;
+//     }
+// }
 
 void recfragment::join_sequence(const recfragment* frag) {
-    vector<pair<int,char> > bases = frag->_mapped;
-    for (vector<pair<int,char> >::const_iterator it = frag->_mapped.begin();
+    //vector<qseqbase> bases = frag->_mapped;
+    for (vector<qseqbase>::const_iterator it = frag->_mapped.begin();
          it != frag->_mapped.end(); it++) {
         _mapped.push_back(*it);
     }
     if ((_position3 > frag->_position5 && _position5 <= frag->_position3)) {
-        sort(_mapped.begin(), _mapped.end(), compare_first_index);
+        //sort(_mapped.begin(), _mapped.end(), compare_first_index);
+        sort(_mapped.begin(), _mapped.end(), qseqbase::compare_position);//compare_first_index);
         //vector<int> ambiguous;
         for (int i = (int)_mapped.size() - 1; i > 0; i--) {
-            if (_mapped[i].first == _mapped[i-1].first) {
-                if (_mapped[i].second != _mapped[i-1].second) {
+            if (_mapped[i].position() == _mapped[i-1].position()) {
+                if (_mapped[i].nucleotide() != _mapped[i-1].nucleotide()) {
                     //ambiguous.push_back(i);
                     _mapped.erase(_mapped.begin() + i, _mapped.begin() + i + 2);
                 }

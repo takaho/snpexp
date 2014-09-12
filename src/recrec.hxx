@@ -120,6 +120,24 @@ namespace tkbio {
         int score() const { return _score; }
     };
 
+    class qseqbase {
+        int _position;
+        char _nucleotide;
+        unsigned char _quality;
+    public:
+        qseqbase(int pos, char nuc, unsigned char qual) {
+            _position = pos;
+            _nucleotide = nuc;
+            _quality = qual;
+        }
+        int position() const { return _position; }
+        char nucleotide() const { return _nucleotide; }
+        unsigned char quality() const { return _quality; }
+        static int compare_position(const qseqbase& lhs, const qseqbase& rhs) {
+            return lhs._position < rhs._position;
+        }
+    };
+
     ///// sequence read to detect recombination
     class recfragment {
         string _name;     // name of the read
@@ -132,7 +150,8 @@ namespace tkbio {
         int _position5;   // upper margin of alignment
         int _position3;   // lower margin of alignment
         int _max_match_span;  // maximum match length
-        vector<pair<int,char> > _mapped;  // nucleotides
+        //vector<pair<int,char> > _mapped;  // nucleotides
+        vector<qseqbase> _mapped;
     private:
         // inhibit default and copy constructors
         recfragment();
@@ -147,7 +166,6 @@ namespace tkbio {
         //
         vector<pair<int,char> > get_positions() const;
         void join_sequence(const recfragment* frag);
-        void generate_recombination_pattern(const vector<hetero_locus>& loci, int* pattern) const;
 
     public:
         //recfragment(const string& chromosome, int position, int flag, const string& sequence, const string& cigar);
@@ -167,15 +185,18 @@ namespace tkbio {
         bool is_compound() const { return _flag & FLAG_JOINED; }
         // getters
         char get_base(int position, int& count) const;
+        char get_base(int position, unsigned char qual_thr, int& count) const;
         int get_base_id(int position, int& count) const;
+        int get_base_id(int position, unsigned char qual_thr, int& count) const;
         void test_heterozygosity(int num, char const* reference, char* const alt, int* result) const;
         string to_string() const;
 
         // recombination test
-        string get_recombination_pattern(const vector<hetero_locus>& loci) const;
-        vector<recpattern> get_recombination_borders(const vector<hetero_locus>& loci, int minimum_span=2) const;
+        void generate_recombination_pattern(const vector<hetero_locus*>& loci, int* pattern) const;
+        string get_recombination_pattern(const vector<hetero_locus*>& loci) const;
+        vector<recpattern> get_recombination_borders(const vector<hetero_locus*>& loci, int minimum_span=2) const;
         recpattern::Genotype get_recombination_pattern(int pos5, int pos3, int minimum_span=2) const;
-        pair<int,int> get_recombination(const vector<hetero_locus>& loci, float diff_ratio=0.0) const;
+        pair<int,int> get_recombination(const vector<hetero_locus*>& loci, float diff_ratio=0.0) const;
 
         // join pairs
         static void bundle_pairs(vector<recfragment*>& fragments) throw (runtime_error);

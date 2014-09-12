@@ -346,7 +346,7 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
         } else {
             break;
         }
-        if (left == right) {
+        if (left >= right) {
             break;
         }
         center = (left + right) / 2;
@@ -402,7 +402,7 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
     fi.close();
 }
 
-vector<dbsnp_locus const*> dbsnp_file::get_snps(const string& chromosome, int start, int end) const throw (exception) {
+vector<dbsnp_locus const*> dbsnp_file::get_snps(string chromosome, int start, int end) const throw (exception) {
     string cname;
     if (chromosome.find("chr") == 0) {
         cname = chromosome.substr(3, chromosome.size());
@@ -410,7 +410,7 @@ vector<dbsnp_locus const*> dbsnp_file::get_snps(const string& chromosome, int st
         cname = chromosome;
     }
     vector<dbsnp_locus const*> snps;
-    const_cast<dbsnp_file*>(this)->load_snps(chromosome, start, end);
+    const_cast<dbsnp_file*>(this)->load_snps(cname, start, end);
     for (int i = 0; i < (int)(_cache.size()); i++) {
         dbsnp_locus const* cp = _cache[i];
         if (start <= cp->_position && cp->_position <= end) {
@@ -497,10 +497,6 @@ void dbsnp_file::add_cache(const string& chromosome, size_t pos, size_t fpos) {
     _indicators.push_back(new cache_position(chromosome, pos, fpos));
 }
 
-namespace {
-    void analyze_strain() {
-    }
-}
     
 // // int main(int argc, char** argv) {
 // //     try {
