@@ -54,6 +54,7 @@ namespace tkbio {
         ~dbsnp_locus();
         void set_genotype(int strain_index, char const* info);
         friend class dbsnp_file;
+        size_t position() const { return _position; }
         string to_string() const;
         string to_string(const string& chromosome) const;
     };
