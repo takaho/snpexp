@@ -5,12 +5,14 @@
 #include <iosfwd>
 #include <vector>
 #include <set>
+#include <string>
 
 using std::exception;
 using std::ostream;
 using std::ostream;
 using std::vector;
 using std::set;
+using std::string;
 
 //#include <recrec.hxx>
 
@@ -22,6 +24,7 @@ namespace tkbio {
     class recpattern;
     class dbsnp_file;
     class hetero_locus;
+    class dbsnp_locus;
 
     class fragment_processor {
     protected:
@@ -60,8 +63,15 @@ namespace tkbio {
 
     class snp_enumerator : public fragment_processor {
         int _coverage;
+        float _minimum_minor_ratio;
+    private:
+        string get_genotype_symbol(dbsnp_locus const* snp, int counts[5]) const;
     public:
-        snp_enumerator(int coverage);
+        snp_enumerator(int coverage, float hetero_threshold=0.0f);
+        virtual void process_fragments(const vector<recfragment*>& fragments,
+                                       chromosome_seq const* chromosome,
+                                       int start, int end, ostream& ost) throw (exception);
+
     };
 }
 
