@@ -1,16 +1,20 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <sstream>
 
 using std::cout;
 using std::endl;
 using std::vector;
 using std::ostream;
+using std::stringstream;
 
 #include <fragmentprocessor.hxx>
 #include <recrec.hxx>
 #include <distsnp.hxx>
+#include <tktools.hxx>
 
+using tktools::split_items;
 using namespace tkbio;
 
 fragment_processor::fragment_processor() {
@@ -175,3 +179,123 @@ void recombination_detector::process_fragments(const vector<recfragment*>& fragm
 }
 
 
+snp_enumerator::snp_enumerator(int coverage, float hetero_threshold) {
+    _coverage = coverage;
+    _minimum_minor_ratio = hetero_threshold;
+}
+
+namespace {
+    inline int get_index(char c) {
+        switch (c) {
+        case 'A': return 0;
+        case 'C': return 1;
+        case 'G': return 2;
+        case 'T': return 3;
+        case '-': return 4;
+        }
+        return -1;
+    }
+}
+
+string snp_enumerator::get_genotype_symbol(dbsnp_locus const* snp, int counts[5]) const {//throw (exception) {
+    int total = counts[0] + counts[1] + counts[2] + counts[3] + counts[4];
+    if (total < _coverage) {
+        return ".";
+    }
+    const string& reference = snp->reference();
+    const string& alternative = snp->alternative();
+    if (reference.size() == 1 && alternative.size() == 1) {
+        int refind = get_index(reference.c_str()[0]);
+        int altind = get_index(alternative.c_str()[0]);
+        if (refind < 0 || altind < 0) {
+            return "-";//undetermined";
+        }
+        int n0 = counts[refind];
+        int n1 = counts[altind];
+        if (n0 + n1 < _coverage) {
+            return ".";
+        }
+        int thr = (int)(_minimum_minor_ratio * (n0 + n1) + .5);
+        if (n0 < thr) {
+            return "1/1";
+        } else if (n1 < thr) {
+            return "0/0";
+        } else {
+            return "0/1";
+        }
+    } else {
+        if (reference.size() != 1) {
+            return "-";//undetermined";
+        }
+        int refind = get_index(snp->reference().c_str()[0]);
+        if (refind < 0) {
+            return "-";//undetermined";
+        }
+        vector<string> items = split_items(alternative, ',');
+        vector<pair<int,int> > nums;
+        nums.push_back(make_pair(refind, counts[refind]));
+        int total_alleles = counts[refind];
+        for (int i = 0; i < (int)items.size(); i++) {
+            if (items[i].size() == 1) {
+                int index = get_index(items[i].c_str()[0]);
+                if (index >= 0) {
+                    nums.push_back(make_pair(index, counts[i]));
+                    total_alleles += counts[i];
+                }
+            }
+        }
+        stringstream ss;
+        int threshold = (int)(_minimum_minor_ratio * total_alleles + 0.5);
+        bool flag = false;
+        for (int i = 0; i < (int)nums.size(); i++) {
+            int max_index = -1;
+            int max_counts = 0;
+            for (int j = 0; j < (int)nums.size(); j++) {
+                pair<int,int>& value = nums[i];
+                if (value.second > max_counts) {
+                    max_index = value.first;
+                    max_counts = value.second;
+                }
+            }
+            if (max_counts > threshold) {
+                if (flag) {
+                    ss << "/";
+                }
+                ss << (i + 1);
+            }
+        }
+        return ss.str();
+    }
+}
+
+void snp_enumerator::process_fragments(const vector<recfragment*>& fragments,
+                                       chromosome_seq const* chromosome,
+                                       int start, int end, ostream& ost) 
+    throw (exception){
+    if (_variation_db != NULL) {
+        //set<int> pos;
+        vector<dbsnp_locus const*> snps = _variation_db->get_snps(chromosome->name(), start, end);
+        for (int i = 0; i < (int)snps.size(); i++) {
+            int position = snps[i]->position();
+            //pos.insert(snps[i]->position());
+            int freq[5];
+            //int total = 0;
+            freq[0] = freq[1] = freq[2] = freq[3] = freq[4] = 0;
+            for (int j = 0; j < (int)fragments.size(); j++) {
+                const recfragment* frag = fragments[j];
+                int num;
+                int index = frag->get_base_id(position, _quality_threshold, num);
+                if (index >= 0) {
+                    freq[index] += num;
+                    //total += num;
+                }
+            }
+            ost << chromosome->name() << "\t" << position << "\t" << snps[i]->reference() << "\t" << snps[i]->alternative();
+            ost << "\t" << get_genotype_symbol(snps[i], freq);
+            for (int j = 0; j < 5; j++) {
+                ost << "\t" << freq[j];
+            }
+            ost << "\n";
+        }
+    }
+}

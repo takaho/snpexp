@@ -297,6 +297,7 @@ int main(int argc, char** argv) {
         if (mode == 0) {
             processor = new recombination_detector(coverage, heterozygosity);
         } else if (mode == 1) {
+            processor = new snp_enumerator(coverage, heterozygosity);
         } else if (mode == 2) {
         }
         if (processor == NULL) {
