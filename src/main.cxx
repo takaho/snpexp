@@ -265,7 +265,7 @@ int main(int argc, char** argv) {
         }
 
         for (int i = 2; i < argc; i++) {
-            if (argv[i][0] != '-' && tktools::io::file_exists(argv[i]) && std::strcmp(argv[i] + strlen(argv[i]) - 4, ".bam") == 0) {
+            if (argv[i][0] != '-' && tktools::io::file_exists(argv[i]) && strcmp(argv[i] + strlen(argv[i]) - 4, ".bam") == 0) {
                 cout << argv[i] << endl;
                 filenames.push_back(argv[i]);
             }
@@ -461,7 +461,7 @@ second
             }
 
             //cout << "Fragment size = " << fragments.size() << endl;
-            if (fragments.size() > coverage && chromosome != NULL) {
+            if ((int)fragments.size() > coverage && chromosome != NULL) {
                 // integrate pairs
                 recfragment::bundle_pairs(fragments);
                 // process
