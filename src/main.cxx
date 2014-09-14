@@ -250,6 +250,7 @@ int main(int argc, char** argv) {
         const char* filename_snps = get_argument_string(argc, argv, "V", NULL);
         size_t max_fragments = get_argument_integer(argc, argv, "x", 10000);
         int mapping_quality = get_argument_integer(argc, argv, "q", 10);
+	int display_mode  = get_argument_integer(argc, argv, "D", 1);
         dbsnp_file* dbsnp = NULL;
         vector<string> filenames;
 
@@ -289,6 +290,9 @@ int main(int argc, char** argv) {
             cerr << "Window size      : " << window_size << endl;
             cerr << "Window margin    : " << window_margin << endl;
             cerr << "Quality          : " << mapping_quality << endl;
+	    if (mode == 1) {
+	      cerr << "Display mode     : " << display_mode << endl;
+	    }
             for (int i = 0; i < num_files; i++) {
                 cerr << "Filename         : " << filenames[i] << endl;
             }
@@ -297,7 +301,10 @@ int main(int argc, char** argv) {
         if (mode == 0) {
             processor = new recombination_detector(coverage, heterozygosity);
         } else if (mode == 1) {
-            processor = new snp_enumerator(coverage, heterozygosity);
+	  snp_enumerator* _proc = new snp_enumerator(coverage, heterozygosity);
+	  _proc->set_display_mode(display_mode);
+	  processor = _proc;//new snp_enumerator(coverage, heterozygosity);
+	    
         } else if (mode == 2) {
         }
         if (processor == NULL) {

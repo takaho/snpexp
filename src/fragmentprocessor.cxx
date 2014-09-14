@@ -182,6 +182,7 @@ void recombination_detector::process_fragments(const vector<recfragment*>& fragm
 snp_enumerator::snp_enumerator(int coverage, float hetero_threshold) {
     _coverage = coverage;
     _minimum_minor_ratio = hetero_threshold;
+    _display_mode = 1;
 }
 
 namespace {
@@ -239,33 +240,67 @@ string snp_enumerator::get_genotype_symbol(dbsnp_locus const* snp, int counts[5]
             if (items[i].size() == 1) {
                 int index = get_index(items[i].c_str()[0]);
                 if (index >= 0) {
-                    nums.push_back(make_pair(index, counts[i]));
-                    total_alleles += counts[i];
-                }
+                    nums.push_back(make_pair(index, counts[index]));
+                    total_alleles += counts[index];
+                } else {
+		  nums.push_back(make_pair(-1, 0));
+		}
             }
         }
+	if (total_alleles < _coverage) {
+	  return "-";
+	}
         stringstream ss;
         int threshold = (int)(_minimum_minor_ratio * total_alleles + 0.5);
-        bool flag = false;
+        //bool flag = false;
+	int num_alleles = 0;
+
+// 	cout << endl;
+//         for (int i = 0; i < (int)nums.size(); i++) {
+// 	  cout << i << ":" << nums[i].first << ", " << nums[i].second << endl;
+// 	}
+// 	cout << endl;
+
         for (int i = 0; i < (int)nums.size(); i++) {
             int max_index = -1;
-            int max_counts = 0;
+            int max_counts = threshold;
+	    int array_index = -1;
             for (int j = 0; j < (int)nums.size(); j++) {
-                pair<int,int>& value = nums[i];
-                if (value.second > max_counts) {
+                pair<int,int>& value = nums[j];
+                if (value.second >= max_counts) {
+		  array_index = j;
                     max_index = value.first;
                     max_counts = value.second;
                 }
             }
-            if (max_counts > threshold) {
-                if (flag) {
-                    ss << "/";
-                }
-                ss << (i + 1);
+            if (max_index >= 0) {//max_counts >= threshold) {
+	      //cout << i << "::" << max_index << ", " << max_counts << endl;
+	      if (num_alleles > 0) {
+		ss << "/";
+	      }
+	      num_alleles ++;
+	      ss << array_index;
+	      nums[array_index].second = 0;
             }
         }
+	if (num_alleles == 0) {
+	  return "-";
+	} else if (num_alleles == 1) {
+	  ss << "/" + ss.str();
+	}
         return ss.str();
     }
+}
+
+namespace {
+  char nucleotides[6] = "ACGT-";
+}
+
+void snp_enumerator::set_display_mode(int mode) throw (std::invalid_argument) {
+  if (mode < 0 || mode > 3) {
+    throw std::invalid_argument("display mode is 0,1,2 or 3");
+  }
+  _display_mode = mode;
 }
 
 void snp_enumerator::process_fragments(const vector<recfragment*>& fragments,
@@ -279,7 +314,7 @@ void snp_enumerator::process_fragments(const vector<recfragment*>& fragments,
             int position = snps[i]->position();
             //pos.insert(snps[i]->position());
             int freq[5];
-            //int total = 0;
+            int total = 0;
             freq[0] = freq[1] = freq[2] = freq[3] = freq[4] = 0;
             for (int j = 0; j < (int)fragments.size(); j++) {
                 const recfragment* frag = fragments[j];
@@ -287,15 +322,54 @@ void snp_enumerator::process_fragments(const vector<recfragment*>& fragments,
                 int index = frag->get_base_id(position, _quality_threshold, num);
                 if (index >= 0) {
                     freq[index] += num;
-                    //total += num;
+                    total += num;
                 }
             }
+	    if (_display_mode > 0 && total < _coverage) continue;
+	    string symbol = get_genotype_symbol(snps[i], freq);
+	    if (_display_mode > 1 && (symbol == "." || symbol == "-" || symbol == "0/0")) {
+	      continue;
+	    }
             ost << chromosome->name() << "\t" << position << "\t" << snps[i]->reference() << "\t" << snps[i]->alternative();
-            ost << "\t" << get_genotype_symbol(snps[i], freq);
+		ost << "\t" << symbol;
             for (int j = 0; j < 5; j++) {
                 ost << "\t" << freq[j];
             }
             ost << "\n";
         }
+    } else {
+      for (int pos = start; pos < end; pos++) {
+	char ref = chromosome->get_base(pos);
+	int refind = get_index(ref);
+	if (refind < 0) continue;
+	int freq[5];
+	freq[0] = freq[1] = freq[2] = freq[3] = freq[4] = 0;
+	int total = 0;
+	for (int j = 0; j < (int)fragments.size(); j++) {
+	  const recfragment* frag = fragments[j];
+	  int num;
+	  int index = frag->get_base_id(pos, _quality_threshold, num);
+	  if (index >= 0) {
+	    freq[index] += num;
+	    total += num;
+	  }
+	}
+	if (total < _coverage) continue;
+	int max_minor = 0;
+	int max_ind = -1;
+	for (int j = 0; j < 5; j++) {
+	  if (j != refind && max_minor < freq[j]) {
+	    max_minor = freq[j];
+	    max_ind = j;
+	  }
+	}
+	if (max_ind >= 0 && max_minor >= (int)((freq[refind] + max_minor) * _minimum_minor_ratio + 0.5)) {
+	  ost << chromosome->name() << "\t" << pos << "\t" << nucleotides[refind] << "\t" << nucleotides[max_ind];
+	  for (int j = 0; j < 5; j++) {
+	    ost << "\t" << freq[j];
+	  }
+	  ost << "\n";
+	}
+      }
     }
 }

@@ -64,9 +64,12 @@ namespace tkbio {
     class snp_enumerator : public fragment_processor {
         int _coverage;
         float _minimum_minor_ratio;
+      int _display_mode; // 0: all, 1: covered, 2:non-standard, 3: hetero
     private:
         string get_genotype_symbol(dbsnp_locus const* snp, int counts[5]) const;
     public:
+      int mode() const { return _display_mode; }
+      void set_display_mode(int mode) throw (std::invalid_argument);
         snp_enumerator(int coverage, float hetero_threshold=0.0f);
         virtual void process_fragments(const vector<recfragment*>& fragments,
                                        chromosome_seq const* chromosome,

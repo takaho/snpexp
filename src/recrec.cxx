@@ -165,6 +165,9 @@ char recfragment::get_base(int pos, unsigned char qual_threshold, int& count) co
     int left = 0;
     int size = _mapped.size();
     int right = size;
+    if (pos < _position5 || pos >= _position3) {
+      return '\0';
+    }
     for (;;) {
         int center = (left + right) / 2;
         const qseqbase& p = _mapped[center];
