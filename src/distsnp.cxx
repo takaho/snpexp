@@ -483,7 +483,7 @@ dbsnp_file* dbsnp_file::load_dbsnp(const char* filename, bool force_uncached) th
                     next_position += interval;
                 }
             } else {
-                cout << "too few columns " << items.size() << " / " << snpfile->strain_number() << endl;
+                cout << "too few columns " << items.size() << " / " << snpfile->strain_number() << "     " << endl;
             }
         }
     }
