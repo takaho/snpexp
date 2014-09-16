@@ -160,8 +160,8 @@ void recombination_detector::process_fragments(const vector<recfragment*>& fragm
             }
             if (check_acceptable_recombination(counts)) {
                 ost << chromosome->name() << ":" << loci[i]->position() << "-" << loci[i+l]->position() << "\t" << loci[i]->ref() << ";" << loci[i]->alt() << "\t" << loci[i+l]->ref() << ";" << loci[i+l]->alt() << "\t";
-                for (int i = 0; i < 4; i++) {
-                    ost << "\t" << counts[i];
+                for (int j = 0; j < 4; j++) {
+                    ost << "\t" << counts[j];
                 }
                 ost << "\n";
                 i += (l - 1);

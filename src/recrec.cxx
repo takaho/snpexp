@@ -377,7 +377,7 @@ pair<int,int> recfragment::get_recombination(const vector<hetero_locus*>& loci, 
     int limit_right = size;
     int index = limit_left;
     int max_diff = 4;
-    int max_index = -1;
+    //int max_index = -1;
     pair<int,int> border = make_pair(-1,-1);
     for (int i = 0; i < size; i++) {
         right_score += buffer[i];
@@ -385,7 +385,7 @@ pair<int,int> recfragment::get_recombination(const vector<hetero_locus*>& loci, 
     while (index < limit_right) {
         //for (int i = 2; i < size - 2; i++) {
         int l1 = buffer[index];
-        bool found = false;
+        //bool found = false;
         if (l1 != 0) {
             for (int j = index + 1; j < limit_right; j++) {
                 int l2 = buffer[j];
@@ -397,11 +397,11 @@ pair<int,int> recfragment::get_recombination(const vector<hetero_locus*>& loci, 
                             && abs(left_score) >= minimum_diff
                             && abs(right_score) >= minimum_diff) {
                             max_diff = diff;
-                            max_index = index;
+                            //max_index = index;
                             border = make_pair(loci[index]->position(), loci[j]->position());
                         }
                     }
-                    found = true;
+                    //found = true;
                     break;
                 }
             }
@@ -589,7 +589,7 @@ vector<chromosome_seq*> chromosome_seq::load_genome(const char* filename) throw 
             } else {
                 seq = NULL;
             }
-        } else if (seq != NULL && length < size_buffer) {
+        } else if (seq != NULL && length < (int)size_buffer) {
             const char* ptr = line.c_str();
             for (int i = 0; i < (int)line.size(); i++) {
                 char base = '\0';
@@ -608,7 +608,7 @@ vector<chromosome_seq*> chromosome_seq::load_genome(const char* filename) throw 
                     base = 'N'; break;
                 }
                 if (base != '\0') {
-                    if (length >= size_buffer) {
+                    if (length >= (int)size_buffer) {
                         cerr << "too much nucleotides > " << size_buffer << endl;
                         //buffer[size_buffer-1] = '\0';
                     } else {
