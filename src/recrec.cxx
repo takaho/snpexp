@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <sstream>
 #include <fstream>
+#include <set>
 
 #ifndef HAVE_BAM_H
 #error You do not have bam library
@@ -23,7 +24,7 @@ using std::ofstream;
 using std::cout;
 using std::cerr;
 using std::stringstream;
-
+using std::set;
 
 #include <tktools.hxx>
 #include <gtf.hxx>
@@ -41,11 +42,17 @@ using tktools::bio::convert_code_to_chromosome;
 
 //#define TEST 1
 
-recfragment::recfragment(int chromosome, bam1_t* seq, int num) {
+recfragment::recfragment(int chromosome, bam1_t* seq, int num, const set<int>& accepted) {
     _chromosome = chromosome;
     _group = num;
-    initialize(seq);
+    initialize(seq, accepted);
 }
+
+// recfragment::recfragment(int chromosome, bam1_t* seq, int num) {
+//     _chromosome = chromosome;
+//     _group = num;
+//     initialize(seq);
+// }
 
 namespace {
     char _bamnucleotide[17] = "\?AC\?G\?\?\?T\?\?\?\?\?-N";
@@ -105,11 +112,12 @@ namespace {
     const unsigned char QUAL_GAP = 10;
 }
 
-void recfragment::initialize(bam1_t* read) {
+void recfragment::initialize(bam1_t* read, const set<int>& positions) {
+    bool use_all = &positions == &USE_ALL;
     const uint32_t* cigar = bam1_cigar(read);
     const uint8_t* sequence = bam1_seq(read);
     int len = read->core.n_cigar;
-    int spos = read->core.pos;
+    int spos = read->core.pos + 1;
     int fpos = 0;
     int offset = 4;
     const char* qname = bam1_qname(read);
@@ -133,7 +141,9 @@ void recfragment::initialize(bam1_t* read) {
                 uint8_t base = (sequence[fpos >> 1] >> offset) & 15;
                 unsigned char qual = qptr[fpos];
                 offset = 4 - offset;
-                _mapped.push_back(qseqbase(spos, _bamnucleotide[base], qual));
+                if (use_all || positions.find(spos) != positions.end()) {
+                    _mapped.push_back(qseqbase(spos, _bamnucleotide[base], qual));
+                }
                 //_mapped.push_back(make_pair(spos, _bamnucleotide[base]));
                 spos++;
                 fpos++;
@@ -145,7 +155,9 @@ void recfragment::initialize(bam1_t* read) {
             }
         } else if (op == BAM_CDEL) { // D
             for (int j = 0; j < slen; j++) {
-                _mapped.push_back(qseqbase(spos + j, '-', QUAL_GAP));
+                if (use_all || positions.find(spos + j) != positions.end()) {
+                    _mapped.push_back(qseqbase(spos + j, '-', QUAL_GAP));
+                }
 //make_pair(spos + j, '-'));
             }
             spos += slen;
@@ -161,11 +173,13 @@ void recfragment::initialize(bam1_t* read) {
     _flag = read->core.flag;
 }
 
+const set<int> recfragment::USE_ALL;
+
 char recfragment::get_base(int pos, unsigned char qual_threshold, int& count) const {
     int left = 0;
     int size = _mapped.size();
     int right = size;
-    if (pos < _position5 || pos >= _position3) {
+    if (pos < _position5 || pos >= _position3 || size == 0) {
       return '\0';
     }
     for (;;) {

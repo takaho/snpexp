@@ -4,8 +4,10 @@
 #include <string>
 #include <bam.h>
 #include <iosfwd>
+#include <set>
 
 //using namespace std;
+using std::set;
 using std::string;
 using std::ostream;
 using std::vector;
@@ -152,6 +154,9 @@ namespace tkbio {
         int _max_match_span;  // maximum match length
         //vector<pair<int,char> > _mapped;  // nucleotides
         vector<qseqbase> _mapped;
+
+        static const set<int> USE_ALL;
+
     private:
         // inhibit default and copy constructors
         recfragment();
@@ -160,8 +165,9 @@ namespace tkbio {
         static const int FLAG_JOINED;
 
         // initializers
-        void initialize(int position, const string& sequence, const string& cigar);
-        void initialize(bam1_t* sequence);
+        //void initialize(int position, const string& sequence, const string& cigar);
+        //void initialize(bam1_t* sequence);
+        void initialize(bam1_t* sequence, const set<int>& accepted_positions=USE_ALL);
 
         //
         vector<pair<int,char> > get_positions() const;
@@ -170,7 +176,8 @@ namespace tkbio {
     public:
         //recfragment(const string& chromosome, int position, int flag, const string& sequence, const string& cigar);
         // constructor with a BAM read
-        recfragment(int chromosome, bam1_t* sequence, int group=0);
+        //recfragment(int chromosome, bam1_t* sequence, int group=0);
+        recfragment(int chromosome, bam1_t* sequence, int group=0, const set<int>& accepted_positions=USE_ALL);
 
         // properties
         const string& name() const { return _name; }
