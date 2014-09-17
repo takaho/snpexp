@@ -62,14 +62,29 @@ namespace {
 
 
 //#define TEST 1
-dbsnp_locus::dbsnp_locus(size_t position, string reference, string alternative, int num_strains) {
+dbsnp_locus::dbsnp_locus(size_t position, const string& reference, const string& alternative) {//, int num_strains) {
     _position = position;
     _reference = reference;
     _alternative = alternative;
+    //num_strains = 0;
+    _num_strains = 0;//num_strains;
+    _strains = NULL;
+//     _strains = new unsigned char[_num_strains];
+//     for (int i = 0; i < _num_strains; i++) {
+//         _strains[i] = 0x00;
+//     }
+}
+
+dbsnp_locus::dbsnp_locus(size_t position, const string& rsid, const string& reference, const string& alternative, int num_strains) {
+    _position = position;
+    _reference = reference;
+    _alternative = alternative;
+    //num_strains = 0;
+    _rsid = rsid;
     _num_strains = num_strains;
     _strains = new unsigned char[_num_strains];
     for (int i = 0; i < _num_strains; i++) {
-        _strains[i] = 0x00;
+      _strains[i] = 0x00;
     }
 }
 
@@ -78,45 +93,54 @@ dbsnp_locus::~dbsnp_locus() {
 }
 
 void dbsnp_locus::set_genotype(int index, char const* info) {
-    if (info[0] == '.') {
-        _strains[index] = 0x00;
+  if (index < 0 || index > _num_strains) {
+    throw std::out_of_range("cannot set genotype at the index");
+  }
+  if (_strains == NULL) {
+    _strains = new unsigned char[_num_strains];
+    for (int i = 0; i < _num_strains; i++) {
+      _strains[i] = (unsigned char)0x00;
     }
-    int col = 0;
-    const char* ptr = info;
-    unsigned char genotype = 0x00;
-    for (;;) {
-        char c = *ptr;
-        if (c == '\0') {
-            break;
-        } else if (c == ':') {
-            break;
-        } else if (c == '/') {
-            col = 1;
-            //if (++col >= 2) break;
-        } else if (c >= '0' && c <= '9') {
-            int an = atoi(ptr);
-            unsigned char allele;
-            if (an < 0) {
-                allele = (unsigned char)0;
-            } else if (an >= 15) {
-                allele = (unsigned char)15;
-            } else {
-                allele = an + 1;
-            }
-            //cout << col << " ;; " << ptr << " => " << (int)allele << endl;
-            if (col == 0) {
-                genotype = allele << 4;
-                col = -1;
-            } else if (col == 1) {
-                genotype |= allele;
-                col = -1;
-            }
-        }
-        ptr++;
+  }
+  if (info[0] == '.') {
+    _strains[index] = 0x00;
+  }
+  int col = 0;
+  const char* ptr = info;
+  unsigned char genotype = 0x00;
+  for (;;) {
+    char c = *ptr;
+    if (c == '\0') {
+      break;
+    } else if (c == ':') {
+      break;
+    } else if (c == '/') {
+      col = 1;
+      //if (++col >= 2) break;
+    } else if (c >= '0' && c <= '9') {
+      int an = atoi(ptr);
+      unsigned char allele;
+      if (an < 0) {
+	allele = (unsigned char)0;
+      } else if (an >= 15) {
+	allele = (unsigned char)15;
+      } else {
+	allele = an + 1;
+      }
+      //cout << col << " ;; " << ptr << " => " << (int)allele << endl;
+      if (col == 0) {
+	genotype = allele << 4;
+	col = -1;
+      } else if (col == 1) {
+	genotype |= allele;
+	col = -1;
+      }
     }
-    //cout << info << "\t" << hex << (int)genotype << dec << endl;
-
-    _strains[index] = genotype;
+    ptr++;
+  }
+  //cout << info << "\t" << hex << (int)genotype << dec << endl;
+  
+  _strains[index] = genotype;
 }
 
 string dbsnp_locus::to_string() const {
@@ -394,7 +418,7 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
 
     int index = center;
     if (_indicators[center]->chromosome != chromosome) {
-        cerr << "no data for chromosome " << chromosome << endl;
+      //cerr << "no data for chromosome " << chromosome << endl;
         return;
     }
     size_t left_limit = _indicators[0]->file_position;//header_size;
@@ -444,7 +468,7 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
         //cout << items[0] << ":" << items[1] << "\t" << items[2] << endl;
         if (items.size() >= _strains.size() + col_strain) {
             int pos = atoi(items[1].c_str());
-            dbsnp_locus* snp = new dbsnp_locus(pos, items[3], items[4], _strains.size());
+            dbsnp_locus* snp = new dbsnp_locus(pos, items[2], items[3], items[4], _strains.size());
             for (int i = 0; i < (int)_strains.size(); i++) {
                 snp->set_genotype(i, items[i + col_strain].c_str());
             }

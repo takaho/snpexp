@@ -124,21 +124,6 @@ bool recombination_detector::check_acceptable_recombination(int counts[4]) const
 }
 
 namespace {
-    int get_base_id(const string& pattern) {
-        if (pattern == "A") {
-            return 0;
-        } else if (pattern == "C") {
-            return 1;
-        } else if (pattern == "G") {
-            return 2;
-        } else if (pattern == "T") {
-            return 3;
-        } else if (pattern == "-") {
-            return 4;
-        } else {
-            return -1;
-        }
-    }
 }
 
 void recombination_detector::process_fragments(const vector<recfragment*>& fragments,
@@ -155,11 +140,17 @@ void recombination_detector::process_fragments(const vector<recfragment*>& fragm
         vector<dbsnp_locus const*> snps = _variation_db->get_snps(chromosome->name(), start, end);
         for (int i = 0; i < (int)snps.size(); i++) {
             //pos.insert(snps[i]->position());
-            int refid = get_base_id(snps[i]->reference());
-            int altid = get_base_id(snps[i]->alternative());
+	  int refid = hetero_locus::get_base_id(snps[i]->reference());
+	  int altid = hetero_locus::get_base_id(snps[i]->alternative());
             if (refid >= 0 && altid >= 0) {//snps[i]->reference().size() == 1 && snps[i]->alternative().size() == 1) {
                 //int chromosome_code; // chromosome->name()
-                loci.push_back(new hetero_locus(chromosome->code(), snps[i]->position(), refid, 0, altid, 0));//snps[i]->reference().c_str()[0], 0, snps[i]->alternative().c_str()[0], 0));
+	      hetero_locus* hl = new hetero_locus(chromosome->code(), snps[i]);
+	      if (hl->is_available()) {
+		loci.push_back(hl);
+	      } else {
+		delete hl;
+	      }
+	      //                loci.push_back(new hetero_locus(chromosome->code(), snps[i]->position(), refid, 0, altid, 0));//snps[i]->reference().c_str()[0], 0, snps[i]->alternative().c_str()[0], 0));
             }
         }
         if (loci.size() < 2) {
@@ -246,24 +237,37 @@ void recombination_detector::process_fragments(const vector<recfragment*>& fragm
             }
         }
         if (check_acceptable_recombination(counts)) {
-            ost << chromosome->name() << ":" << loci[std::max(0, i - _snp_stretches)]->position() << "-" << loci[std::min((int)loci.size() - 1, i + _snp_stretches - 1)]->position();
+	  hetero_locus const* snp_5 = loci[std::max(0, i - _snp_stretches)];
+	  hetero_locus const* snp_3 = loci[std::min((int)loci.size() - 1, i + _snp_stretches - 1)];
+	  
+	  ost << chromosome->name() << ":" << snp_5->position() << "-" << snp_3->position() << "\t" << snp_5->id() << "-" << snp_3->id();
 // << "\t" << loci[i]->ref() << ";" << loci[i]->alt() << "\t" << loci[i+l]->ref() << ";" << loci[i+l]->alt() << "\t";
             for (int j = 0; j < 4; j++) {
                 ost << "\t";
                 for (int k = i - _snp_stretches; k < i + _snp_stretches; k++) {
                     hetero_locus const* locus = loci[k];//- _snp_stretches + k];
-                    if (j == 0) {
-                        ost << locus->ref();
-                    } else if (j == 3) {
-                        ost << locus->alt();
-                    } else {
-                        if (k < i) {
-                            ost << locus->ref();
-                        } else {
-                            ost << locus->alt();
-                        }
-                    }
-                }
+		    if (k < i) {
+		      ost << ((j & 2) == 0 ? locus->alt() : locus->ref());
+		    } else {
+		      ost << ((j & 1) == 0 ? locus->alt() : locus->ref());
+		    }
+		}
+// 		      if ((j & 1) == 0) 
+//                     if (j == 0) {
+//                         ost << locus->ref();
+//                     } else if (j == 3) {
+//                         ost << locus->alt();
+// 		    } else if (j == 1) {
+// 		      if ( k < i) {
+// 			ost << locus->
+//                     } else {
+//                         if (k < i) {
+//                             ost << locus->ref();
+//                         } else {
+//                             ost << locus->alt();
+//                         }
+//                     }
+//                 }
                 ost << ";" << counts[j];
                 //ost << loci[i - _snp_stretches + k - 1]
                 //ost << "\t" << counts[j];

@@ -356,9 +356,6 @@ second
                 processor->process_fragments(fragments, chromosome, analysis_start, analysis_end, *ost);
                 *ost << std::flush;
             }
-            if (analysis_start > 195003283) {//194960775) {
-                cout << "checking point\n";
-            }
 
             if (num_chr_finish == num_files) {// || chromosome->length() <= analysis_start) { // change chromosome
                 int next_chr = -1;

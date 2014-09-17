@@ -44,18 +44,25 @@ namespace tkbio {
     };
 
     class dbsnp_locus {
-        size_t _position;
-        string _reference;
-        string _alternative;
-        int _num_strains;
-        unsigned char* _strains;
+      size_t _position;
+      string _reference;
+      string _alternative;
+      int _num_strains;
+      string _rsid;
+      unsigned char* _strains;
+    private:
+      dbsnp_locus();
+      const dbsnp_locus& operator = (const dbsnp_locus& rhs);
+      dbsnp_locus(const dbsnp_locus& rhs);
     public:
-        dbsnp_locus(size_t position, string reference, string alternative, int num_strains=1);
+      dbsnp_locus(size_t position, const string& reference, const string& alternative);
+      dbsnp_locus(size_t position, const string& rsid, const string& reference, const string& alternative, int num_strains=0);
         ~dbsnp_locus();
         void set_genotype(int strain_index, char const* info);
         friend class dbsnp_file;
         const string& reference() const { return _reference; }
         const string& alternative() const { return _alternative; }
+      const string& rsid() const { return _rsid; }
         size_t position() const { return _position; }
         string to_string() const;
         string to_string(const string& chromosome) const;

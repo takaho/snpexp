@@ -29,6 +29,7 @@ using std::set;
 #include <tktools.hxx>
 #include <gtf.hxx>
 #include <recrec.hxx>
+#include <distsnp.hxx>
 
 using namespace tkbio;
 
@@ -443,6 +444,62 @@ string recfragment::get_recombination_pattern(const vector<hetero_locus*>& loci)
     delete[] pat;
     delete[] buffer;
     return pattern;
+}
+
+hetero_locus::hetero_locus(int chromosome, int position, unsigned char reference, int reference_count, unsigned char alt, int alt_count) {
+  this->_chromosome = chromosome;
+  this->_position = position;
+  this->_reference = reference;
+  this->_alt = alt;
+  this->_refcount = reference_count;
+  this->_altcount = alt_count;
+  this->_snp = NULL;
+}
+
+hetero_locus::hetero_locus(int chrom, dbsnp_locus const* snp) {
+  _chromosome = chrom;
+  _snp = snp;
+  _position = (int)snp->position();
+  _reference = get_base_id(snp->reference());
+  _alt = get_base_id(snp->alternative());
+  _refcount = _altcount = 1;
+}
+
+	// return 0 <= index1 && index1 < 5 && 0 <= index2 && index2 < 5;
+namespace {
+  const char _id2base[6] = "ACGT-";
+}
+
+string hetero_locus::id() const {
+  if (_snp != NULL) {
+    string rsid = _snp->rsid();
+    if (rsid.size() > 1) {
+      return rsid;
+    }
+  }
+  std::stringstream ss;
+  ss << tktools::bio::convert_code_to_chromosome(_chromosome) << ":" << _position << ":" << _id2base[_reference] << "/" << _id2base[_alt];
+  return ss.str();
+}
+
+bool hetero_locus::is_available() const {
+  return (_refcount > 0 && _altcount > 0) && _reference >= 0 && _reference < 5 && 0 <= _alt && _alt < 5;
+}
+
+int hetero_locus::get_base_id(const string& pattern) {
+  if (pattern == "A") {
+    return 0;
+  } else if (pattern == "C") {
+    return 1;
+  } else if (pattern == "G") {
+    return 2;
+  } else if (pattern == "T") {
+    return 3;
+  } else if (pattern == "-") {
+    return 4;
+  } else {
+    return -1;
+  }
 }
 
 string hetero_locus::chromosome() const {

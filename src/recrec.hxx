@@ -19,6 +19,7 @@ using std::runtime_error;
 typedef unsigned int uint;
 namespace tkbio {
     class recfragment;
+  class dbsnp_locus;
 
     //// Chromosome
     class chromosome_seq {
@@ -74,6 +75,7 @@ namespace tkbio {
         static vector<chromosome_seq*> load_genome(const char* filename) throw (exception);
     };
 
+  class dbsnp_locus;
     /// Heterozygous locus
     /// containing chromosome information and reference/alt SNPs
     class hetero_locus {
@@ -84,32 +86,29 @@ namespace tkbio {
         int _alt;
         int _refcount;
         int _altcount;
+      dbsnp_locus const* _snp;
     public:
-        hetero_locus(int chromosome, int position, unsigned char reference, int reference_count, unsigned char alt, int alt_count) {
-            this->_chromosome = chromosome;
-            this->_position = position;
-            this->_reference = reference;
-            this->_alt = alt;
-            this->_refcount = reference_count;
-            this->_altcount = alt_count;
-        }
-        int position() const { return _position; }
-        int chromosome_code() const { return _chromosome; }
-        string chromosome() const;
-        int count_alt() const { return _altcount; }
-        int count_ref() const { return _refcount; }
-        int get_ref() const { return _reference; }
-        int get_alt() const { return _alt; }
-        char ref() const { return "ACGT-"[_reference]; }
-        char alt() const { return "ACGT-"[_alt];}
-        string to_string() const;
-        bool is_available() const {
-            // return 0 <= index1 && index1 < 5 && 0 <= index2 && index2 < 5;
-            return _refcount > 0 && _altcount > 0 && _reference < 5 && _altcount < 5;
-        }
-        friend class recfragment;
+      hetero_locus(int chromosome, int position, unsigned char reference, int reference_count, unsigned char alt, int alt_count);
+      hetero_locus(int chromosome, dbsnp_locus const* snp);
+      //dbsnp_locus const* snp() const { return _snp; }
+      //bool is_available() const { return _reference >= 0 && _alt >= 0; }
+      string id() const;
+      int position() const { return _position; }
+      int chromosome_code() const { return _chromosome; }
+      string chromosome() const;
+      int count_alt() const { return _altcount; }
+      int count_ref() const { return _refcount; }
+      int get_ref() const { return _reference; }
+      int get_alt() const { return _alt; }
+      char ref() const { return "ACGT-"[_reference]; }
+      char alt() const { return "ACGT-"[_alt];}
+      string to_string() const;
+      bool is_available() const;
+      //}
+      static int get_base_id(const string& pattern);
+      friend class recfragment;
     };
-
+  
     class recpattern {
     public:
         typedef enum Genotype {REF_REF=0, REF_ALT=1, ALT_REF=2, ALT_ALT=3, UNDETERMINED=-1} Genotype;
