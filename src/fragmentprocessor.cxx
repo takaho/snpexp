@@ -296,7 +296,7 @@ namespace {
   char nucleotides[6] = "ACGT-";
 }
 
-void snp_enumerator::set_display_mode(int mode) throw (std::invalid_argument) {
+void fragment_processor::set_display_mode(int mode) throw (std::invalid_argument) {
   if (mode < 0 || mode > 3) {
     throw std::invalid_argument("display mode is 0,1,2 or 3");
   }

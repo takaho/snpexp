@@ -64,6 +64,20 @@ namespace {
 }    
 
 
+namespace {
+    void show_help() {
+        cerr << "recrec [command] [options] bamfile1 bamfile2 ...\n";
+        cerr << "OPTIONS\n";
+        cerr << " -c <number>  : minimum coverage for analysis (10)`n";
+        cerr << " -w <number>  : window size to analysis chunk, set more than double of fragment size (3000)\n";
+        cerr << " -H <ratio>   : heterozygosity to determine SNPs gruop\n";
+        cerr << " -g <filename> : genome sequence\n";
+        cerr << " -o <filename> : output filename (stdout)\n";
+        cerr << " -q <number>   : threshold of mapping quality (10)\n";
+        cerr << " -D <number>   : display verbosity (0:all, 1:countable, 2:hetero)\n";
+    }
+}
+
 int main(int argc, char** argv) {
     try {
         //const char* filename = get_argument_string(argc, argv, "i", NULL);
@@ -84,6 +98,11 @@ int main(int argc, char** argv) {
 
         int mode = 0;
         fragment_processor* processor = NULL;
+
+        if (has_option(argc, argv, "h")) {
+            show_help();
+            return 0;
+        }
 
         if (command == "rec" || command == "recombination") {
             mode = 0;
@@ -128,11 +147,11 @@ int main(int argc, char** argv) {
 
         if (mode == 0) {
             processor = new recombination_detector(coverage, heterozygosity);
+            processor->set_display_mode(display_mode);
         } else if (mode == 1) {
-	  snp_enumerator* _proc = new snp_enumerator(coverage, heterozygosity);
-	  _proc->set_display_mode(display_mode);
-	  processor = _proc;//new snp_enumerator(coverage, heterozygosity);
-	    
+            snp_enumerator* _proc = new snp_enumerator(coverage, heterozygosity);
+            _proc->set_display_mode(display_mode);
+            processor = _proc;//new snp_enumerator(coverage, heterozygosity);
         } else if (mode == 2) {
         }
         if (processor == NULL) {
@@ -144,8 +163,12 @@ int main(int argc, char** argv) {
                 cerr << "loading VCF\n";
             }
             dbsnp = dbsnp_file::load_dbsnp(filename_snps);
+
+            dbsnp->get_snps("2", 100000000, 101000000);
+
             processor->set_vcf(dbsnp);
         }
+            exit(0);
         processor->set_quality_threshold(mapping_quality);
 
         ostream* ost = &cout;
@@ -421,6 +444,7 @@ second
 
         return 0;
     } catch (exception& e) {
+        show_help();
         cerr << e.what() << endl;
         return -1;
     }
