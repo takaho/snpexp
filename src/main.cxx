@@ -163,6 +163,16 @@ int main(int argc, char** argv) {
                 cerr << "loading VCF\n";
             }
             dbsnp = dbsnp_file::load_dbsnp(filename_snps);
+            // vector<dbsnp_locus const*> snps;
+            // snps = dbsnp->get_snps("4",  40000000, 50000000);
+            // cout << snps.size() << endl;
+            // for (int i = 0; i < 10; i++) {
+            //     cout << snps[i]->to_string() << endl;
+            // }
+            // snps = dbsnp->get_snps("Y", 60000000, 70000000);
+            // cout << snps.size() << endl;
+            // exit(0);
+
             processor->set_vcf(dbsnp);
         }
         processor->set_quality_threshold(mapping_quality);
@@ -327,15 +337,13 @@ second
                 }
             }
 
-            //cout << "Fragment size = " << fragments.size() << endl;
             if ((int)fragments.size() > coverage && chromosome != NULL) {
                 // integrate pairs
                 recfragment::bundle_pairs(fragments);
                 // process
-                //process_fragments(fragments, chromosome, analysis_start, analysis_end);//, coverage, heterozygosity, *ost);
-                //detect_recombination(fragments, chromosome, analysis_start, analysis_end, coverage, heterozygosity, *ost);
-
-                //cerr << chromosome << ":" << analysis_start << "-" << analysis_end << "//" << snp_positions.size() << "       \r";
+                if (verbose) {
+                    cerr << chromosome->name() << ":" << analysis_start << "-" << analysis_end << " // " << fragments.size() << " // " << snp_positions.size() << "       \r";
+                }
                 processor->process_fragments(fragments, chromosome, analysis_start, analysis_end, *ost);
             }
 
@@ -350,9 +358,9 @@ second
                 if (next_chr < 0) {
                     break;
                 }
-                if (verbose) {
-                    cerr << "change chromosome  " << headers[0]->target_name[next_chr] << endl;
-                }
+                // if (verbose) {
+                //     cerr << "change chromosome  " << headers[0]->target_name[next_chr] << endl;
+                // }
                 current_bamchrm = next_chr;
                 
                 chromosome = NULL;
@@ -388,8 +396,6 @@ second
 
                 int tail = 0;
                 for (int i = 0; i < (int)fragments.size(); i++) {
-                    //for (vector<recfragment*>::iterator it = fragments.begin(); it != fragments.end(); it++) {
-                    //delete *it;
                     const recfragment* f = fragments[i];
                     if (f->position3() > analysis_end) {
                         fragments[tail++] = fragments[i];
@@ -398,9 +404,7 @@ second
                     }
                 }
                 fragments.erase(fragments.begin() + tail, fragments.end());
-                //fragments.erase(fragments.begin(), fragments.end());
             }
-
         }
 
         if (verbose) {
@@ -423,9 +427,6 @@ second
         }
 
         // clean up BAM
-        // bam_destroy1(read);
-        // bam_header_destroy(header);
-        // bam_close(bamfile);
         for (int i = 0; i < num_files; i++) {
             bam_destroy1(reads[i]);
             bam_header_destroy(headers[i]);
@@ -437,6 +438,9 @@ second
 
         // dbsnp
         delete dbsnp;
+
+        // processor
+        delete processor;
 
         return 0;
     } catch (exception& e) {

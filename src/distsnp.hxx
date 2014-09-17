@@ -66,7 +66,13 @@ namespace tkbio {
         vector<string> _strains;
         vector<cache_position*>  _indicators;//dbsnp_locus*> > _indicators;
         vector<dbsnp_locus*> _cache;
-        string _current_chromosome;
+
+        string _cache_chromosome;
+        int _cache_range_start;
+        int _cache_range_end;
+    private:
+        static const int CACHE_RETAIN_TOLERANCE;
+        static const size_t CACHE_LINE_INTERVAL;
     private:
         static string get_cache_filename(const char* filename);
         void save_cache(const char* filename) const throw (exception);

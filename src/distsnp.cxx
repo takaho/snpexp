@@ -148,10 +148,14 @@ string dbsnp_locus::to_string(const string& chromosome) const {
 }
 
 
+const int dbsnp_file::CACHE_RETAIN_TOLERANCE = 10000000;
+const size_t dbsnp_file::CACHE_LINE_INTERVAL = 100000;
+
 dbsnp_file::dbsnp_file(const char* filename, const vector<string>& strains) {
     _strains = strains;
     _filename = filename;
-    _current_chromosome = "not_loaded";
+    _cache_chromosome = "not_loaded";
+    _cache_range_start = _cache_range_end = 0;
 }
 
 string dbsnp_file::get_cache_filename(const char* filename) {
@@ -221,21 +225,26 @@ void dbsnp_file::save_cache(const char* filename) const throw (exception) {
 
     // names of chromosome, length, name (ends with 0), address, number of cache probes
     int location = header_size;
-    
+
+    // chromosomes
+    map<string,int> pointers;
     for (map<string,int>::const_iterator it = probe_size.begin(); it != probe_size.end(); it++) {
         int num_probes = it->second;
+        int buffer_size = sizeof(size_t) * 2 * it->second;// + sizeof(int) * 2 + sizeof(char) * slen;
         int slen = it->first.size() + 1;
         fo.write(reinterpret_cast<char const*>(&slen), sizeof(int));
         fo.write(it->first.c_str(), sizeof(char) * slen);
         fo.write(reinterpret_cast<char const*>(&location), sizeof(int));
         fo.write(reinterpret_cast<char*>(&num_probes), sizeof(int));
-        location += sizeof(size_t) * 2 * it->second + sizeof(int) * 2;
+        pointers[it->first] = location;
+        location += buffer_size;
     }
     
-    fo.seekp(header_size);
+    //fo.seekp(header_size);
     for (map<string,vector<cache_position const*> >::const_iterator it = probes.begin(); it != probes.end(); it++) {
         string chromosome = it->first;
         //cout << chromosome << " : " << it->second.size() << " probes\n";
+        fo.seekp(pointers[chromosome]);
         const vector<cache_position const*>& points = it->second;
         for (int i = 0; i < (int)points.size(); i++) {//size; i++) {
             cache_position const* p = points[i];
@@ -252,24 +261,26 @@ dbsnp_file* dbsnp_file::load_cache(const char* filename) throw (exception) {
     if (fi.is_open() == false) {
         throw runtime_error("cannot open cache file");
     }
-    //size_t size;
+
+    // magic number
     unsigned int magic;
     fi.read(reinterpret_cast<char*>(&magic), sizeof(unsigned int));
     if (magic != MAGIC) {
         fi.close();
         throw runtime_error("magic number inconsistent");
     }
+
+    // the number of chromosomes
     int num_chromosomes;
     fi.read(reinterpret_cast<char*>(&num_chromosomes), sizeof(int));
+
+    // filename
     int string_length;
     fi.read(reinterpret_cast<char*>(&string_length), sizeof(int));
-    //string filename;
     char* filename_vcf = new char[string_length];
     fi.read(filename_vcf, sizeof(char) * string_length);
-    //filename = buffer;
-    //delete[] buffer;
-    //snpfile->_filename = buffer;
 
+    // strains
     int num_strains;
     fi.read(reinterpret_cast<char*>(&num_strains), sizeof(int));
     vector<string> strains;
@@ -285,17 +296,20 @@ dbsnp_file* dbsnp_file::load_cache(const char* filename) throw (exception) {
     delete[] filename_vcf;
 
     // chromosomes
+    // 0-4: length of name
+    // 4-x: chromosome name
+    // x-x+4:address
+    // x+4-x+8:number of probes
     for (int i = 0; i < num_chromosomes; i++) {
         int slen;
         char* cbuf;
         int num_probes, location;
-        //size_t cpos, fpos;
         fi.read(reinterpret_cast<char*>(&slen), sizeof(int));
         cbuf = new char[slen];
         fi.read(cbuf, sizeof(char) * slen);
         fi.read(reinterpret_cast<char*>(&location), sizeof(int));
         fi.read(reinterpret_cast<char*>(&num_probes), sizeof(int));
-        //cerr << cbuf << "\t" << num_probes << " probes from " << hex << location << dec << endl;
+        //cout << cbuf << "\t" << num_probes << " probes from " << hex << location << dec << endl;
         size_t ptr = fi.tellg();
         fi.seekg(location);
         for (int j = 0; j < num_probes; j++) {
@@ -325,15 +339,16 @@ dbsnp_file::~dbsnp_file() {
 
 void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
     if (_cache.size() > 0) {
-        if (_current_chromosome != chromosome) {
+        if (_cache_chromosome != chromosome) {
+            //cerr << "erase " << _cache.size() << " probes\n";
             for (int i = 0; i < (int)_cache.size(); i++) {
                 delete _cache[i];
             }
             _cache.erase(_cache.begin(), _cache.end());
-        } else if ((int)_cache[0]->_position >= start && (int)_cache[_cache.size() - 1]->_position <= end) {
+        } else if (_cache_range_start < start && _cache_range_end > end) {
             return;
         } else {
-            int tolerance = 10000000;
+            int tolerance = CACHE_RETAIN_TOLERANCE;
             for (int i = 0; i < (int)_cache.size(); i++) {
                 if ((int)_cache[i]->position() < start - tolerance) {
                     delete _cache[i];
@@ -343,7 +358,7 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
                 }
             }
             for (int i = (int)_cache.size() - 1; i >= 0; i--) {
-                if ((int)_cache[i]->position() + tolerance > end) {
+                if ((int)_cache[i]->position() > end + tolerance * 2) {
                     for (int j = i; j < (int)_cache.size(); j++) {
                         delete _cache[j];
                     }
@@ -356,20 +371,28 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
     if (_indicators.size() == 0) {
         return;
     }
-    _current_chromosome = chromosome;
+    if (_cache_chromosome != chromosome) {
+        _cache_chromosome = chromosome;
+        _cache_range_start = start;
+        _cache_range_end = end;
+    } else {
+        _cache_range_start = _cache_range_start < start ? _cache_range_start : start;
+        _cache_range_end = _cache_range_end > end ? _cache_range_end : end;
+    }
     int left = 0;
     int right = _indicators.size();
     int center = (left + right) / 2;
     while (true) {
         const cache_position* probe = _indicators[center];
-        //cout << center << "\t" << left << "," << right << "\t" << (probe->chromosome == chromosome) << "\t" << probe->chromosome << ":" << probe->position << "\t" << start << "-" << end << "\t" << probe->file_position << endl;
+        int p = (int)probe->position;
+        //cout << center << "\t" << left << "," << right << "\t" << (start / 1000000) << "-" << (end / 1000000) << "\t" << (probe->chromosome == chromosome) << "\t" << chromosome << "/" << probe->chromosome << ":" << (p / 1000000) << "\t" << (p - start) << ", " << (end - p) << endl;
         if (probe->chromosome < chromosome) {
             left = center + 1;
         } else if (probe->chromosome > chromosome) {
             right = center; 
-        } else if ((int)probe->position < start) {
+        } else if (p < start) {//(int)probe->position < start) {
             left = center + 1;
-        } else if ((int)probe->position > end) {
+        } else if (p > end) {//(int)probe->position > end) {
             right = center;
         } else {
             break;
@@ -382,6 +405,7 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
 
     int index = center;
     if (_indicators[center]->chromosome != chromosome) {
+        cout << "no data for chromosome " << chromosome << endl;
         return;
     }
     size_t left_limit = header_size;
@@ -407,10 +431,10 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
         }
         index++;
     }
-    for (int i = 0; i < (int)_cache.size(); i++) {
-        delete _cache[i];
-    }
-    _cache.erase(_cache.begin(), _cache.end());
+    // for (int i = 0; i < (int)_cache.size(); i++) {
+    //     delete _cache[i];
+    // }
+    // _cache.erase(_cache.begin(), _cache.end());
     ifstream fi(_filename.c_str());
     //if (right_limit = 
     fi.seekg(left_limit);
@@ -420,7 +444,7 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
         string line;
         getline(fi, line);
         vector<string> items = split_items(line, '\t');
-        //cout << items[0] << items[1] << "\t" << items[2] << endl;
+        //cout << items[0] << ":" << items[1] << "\t" << items[2] << endl;
         if (items.size() >= _strains.size() + col_strain) {
             int pos = atoi(items[1].c_str());
             dbsnp_locus* snp = new dbsnp_locus(pos, items[3], items[4], _strains.size());
@@ -443,7 +467,9 @@ vector<dbsnp_locus const*> dbsnp_file::get_snps(string chromosome, int start, in
         cname = chromosome;
     }
     vector<dbsnp_locus const*> snps;
+    //cerr << "current cache size " << _cache.size() << endl;
     const_cast<dbsnp_file*>(this)->load_snps(cname, start, end);
+    //cerr << "current cache size " << _cache.size() << endl;
     for (int i = 0; i < (int)(_cache.size()); i++) {
         dbsnp_locus const* cp = _cache[i];
         if (start <= (int)cp->_position && (int)cp->_position <= end) {
@@ -468,7 +494,7 @@ dbsnp_file* dbsnp_file::load_dbsnp(const char* filename, bool force_uncached) th
     }
     dbsnp_file* snpfile = NULL;//new dbsnp_file(filename);//NULL;
     size_t next_position = 0;
-    size_t interval = 100000;
+    size_t interval = CACHE_LINE_INTERVAL;
     string prev_chrom = "";
 //#define DEBUG
 //#ifdef DEBUG
@@ -512,12 +538,12 @@ dbsnp_file* dbsnp_file::load_dbsnp(const char* filename, bool force_uncached) th
                 }
                 size_t position = std::atoi(items[1].c_str());
                 if (position >= next_position) {
-                    cout << snpfile->_indicators.size() << " add probe at " << fpos << " of " << position << " / " << next_position << "    \r";
+//                    cout << snpfile->_indicators.size() << " add probe at " << fpos << " of " << position << " / " << next_position << "    \r";
                     snpfile->add_cache(chrom, position, fpos);//new cache_position(chrom, position, fpos));
                     next_position += interval;
                 }
-            } else {
-                cout << "too few columns " << items.size() << " / " << snpfile->strain_number() << "     " << endl;
+//            } else {
+//                cout << "too few columns " << items.size() << " / " << snpfile->strain_number() << "     " << endl;
             }
         }
     }
