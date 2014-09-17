@@ -31,7 +31,14 @@ THE SOFTWARE.
 #include <set>
 #include <iosfwd>
 
-using namespace std;
+using std::vector;
+using std::string;
+using std::exception;
+using std::runtime_error;
+using std::invalid_argument;
+using std::ostream;
+using std::set;
+
 
 namespace tktools {
     vector<string> split_items( const string& line, char delimiter = '\t' );

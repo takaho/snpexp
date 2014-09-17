@@ -67,6 +67,9 @@ namespace {
 namespace {
     void show_help() {
         cerr << "recrec [command] [options] bamfile1 bamfile2 ...\n";
+        cerr << "COMMANDS\n";
+        cerr << " rec/recombination   : detect recombination junctions\n";
+        cerr << " count               : enumerate nucleotide frequency of SNP sites\n";
         cerr << "OPTIONS\n";
         cerr << " -c <number>  : minimum coverage for analysis (10)`n";
         cerr << " -w <number>  : window size to analysis chunk, set more than double of fragment size (3000)\n";

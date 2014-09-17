@@ -49,6 +49,8 @@ namespace tkbio {
         float _minimum_minor_ratio;
         int _minimum_recombination_reads;
         float _minimum_recombination_composition;
+        int _snp_stretches; // how many snps are required to define genotype (1)
+        int _gap_tolerance; // how many
     public:
         recombination_detector(int coverage=25, float hetero_threshold=0.25f,
                                float recomb_threshold=0.05f);

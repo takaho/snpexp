@@ -34,6 +34,8 @@ using std::pair;
 using std::atoi;
 using std::hex;
 using std::dec;
+using std::endl;
+
 using namespace tkbio;
 
 using tktools::util::get_argument_string;
@@ -348,24 +350,28 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
         } else if (_cache_range_start < start && _cache_range_end > end) {
             return;
         } else {
-            int tolerance = CACHE_RETAIN_TOLERANCE;
             for (int i = 0; i < (int)_cache.size(); i++) {
-                if ((int)_cache[i]->position() < start - tolerance) {
-                    delete _cache[i];
-                } else {
-                    _cache.erase(_cache.begin(), _cache.begin() + i);
-                    break;
-                }
+                delete _cache[i];
             }
-            for (int i = (int)_cache.size() - 1; i >= 0; i--) {
-                if ((int)_cache[i]->position() > end + tolerance * 2) {
-                    for (int j = i; j < (int)_cache.size(); j++) {
-                        delete _cache[j];
-                    }
-                    _cache.erase(_cache.begin() + i, _cache.end());
-                    break;
-                }
-            }
+            _cache.erase(_cache.begin(), _cache.end());
+            // int tolerance = CACHE_RETAIN_TOLERANCE;
+            // for (int i = 0; i < (int)_cache.size(); i++) {
+            //     if ((int)_cache[i]->position() < start - tolerance) {
+            //         delete _cache[i];
+            //     } else {
+            //         _cache.erase(_cache.begin(), _cache.begin() + i);
+            //         break;
+            //     }
+            // }
+            // for (int i = (int)_cache.size() - 1; i >= 0; i--) {
+            //     if ((int)_cache[i]->position() > end + tolerance * 2) {
+            //         for (int j = i; j < (int)_cache.size(); j++) {
+            //             delete _cache[j];
+            //         }
+            //         _cache.erase(_cache.begin() + i, _cache.end());
+            //         break;
+            //     }
+            // }
         }
     }
     if (_indicators.size() == 0) {
@@ -405,11 +411,11 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
 
     int index = center;
     if (_indicators[center]->chromosome != chromosome) {
-        cout << "no data for chromosome " << chromosome << endl;
+        cerr << "no data for chromosome " << chromosome << endl;
         return;
     }
-    size_t left_limit = header_size;
-    size_t right_limit = 0;//(int)_indicators.size();
+    size_t left_limit = _indicators[0]->file_position;//header_size;
+    size_t right_limit = _indicators[_indicators.size() - 1]->file_position;//0;//(int)_indicators.size();
     while (index >= 0) {
         const cache_position* probe = _indicators[index];
         if (probe->chromosome != chromosome || (int)probe->position < start) {
