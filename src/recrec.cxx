@@ -562,7 +562,7 @@ vector<chromosome_seq*> chromosome_seq::load_genome(const char* filename) throw 
     if (!fi.is_open()) {
         throw invalid_argument("cannot open genome file");
     }
-    size_t length = 0;
+    int length = 0;
     int size_buffer = 300000000;
     char* buffer = new char[size_buffer];
     buffer[0] = 0;
@@ -589,7 +589,7 @@ vector<chromosome_seq*> chromosome_seq::load_genome(const char* filename) throw 
             } else {
                 seq = NULL;
             }
-        } else if (seq != NULL && length < (int)size_buffer) {
+        } else if (seq != NULL && length < size_buffer) {
             const char* ptr = line.c_str();
             for (int i = 0; i < (int)line.size(); i++) {
                 char base = '\0';
@@ -608,7 +608,7 @@ vector<chromosome_seq*> chromosome_seq::load_genome(const char* filename) throw 
                     base = 'N'; break;
                 }
                 if (base != '\0') {
-                    if (length >= (int)size_buffer) {
+                    if (length >= size_buffer) {
                         cerr << "too much nucleotides > " << size_buffer << endl;
                         //buffer[size_buffer-1] = '\0';
                     } else {

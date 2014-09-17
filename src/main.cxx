@@ -163,12 +163,8 @@ int main(int argc, char** argv) {
                 cerr << "loading VCF\n";
             }
             dbsnp = dbsnp_file::load_dbsnp(filename_snps);
-
-            dbsnp->get_snps("2", 100000000, 101000000);
-
             processor->set_vcf(dbsnp);
         }
-            exit(0);
         processor->set_quality_threshold(mapping_quality);
 
         ostream* ost = &cout;

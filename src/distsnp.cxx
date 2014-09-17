@@ -335,7 +335,7 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
         } else {
             int tolerance = 10000000;
             for (int i = 0; i < (int)_cache.size(); i++) {
-                if (_cache[i]->position() < start - tolerance) {
+                if ((int)_cache[i]->position() < start - tolerance) {
                     delete _cache[i];
                 } else {
                     _cache.erase(_cache.begin(), _cache.begin() + i);
@@ -343,9 +343,10 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
                 }
             }
             for (int i = (int)_cache.size() - 1; i >= 0; i--) {
-                if (_cache[i]->position() + tolerance > end) {
-                    delete _cache[i];
-                } else {
+                if ((int)_cache[i]->position() + tolerance > end) {
+                    for (int j = i; j < (int)_cache.size(); j++) {
+                        delete _cache[j];
+                    }
                     _cache.erase(_cache.begin() + i, _cache.end());
                     break;
                 }
