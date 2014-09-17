@@ -35,9 +35,18 @@ namespace tkbio {
         string _name;
         int _code;
         int _bam_code;
+
+        string _filename;
+        size_t _data_start;
+        size_t _data_end;
+        const static unsigned int MAGIC_NUMBER;
     private:
         const chromosome_seq& operator = (const chromosome_seq& rhs);
         chromosome_seq(const chromosome_seq& rhs);
+        void load_sequence_from_cache() throw (exception);
+        static vector<chromosome_seq*> load_from_cache(const char* filename) throw (exception);
+        static void save_cache(const char* filename, const vector<chromosome_seq*>& chromosomes) throw (exception);
+        static string get_cache_filename(const char* filename);
     public:
         chromosome_seq() {
             _sequence = NULL;

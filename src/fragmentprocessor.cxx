@@ -162,6 +162,9 @@ void recombination_detector::process_fragments(const vector<recfragment*>& fragm
                 loci.push_back(new hetero_locus(chromosome->code(), snps[i]->position(), refid, 0, altid, 0));//snps[i]->reference().c_str()[0], 0, snps[i]->alternative().c_str()[0], 0));
             }
         }
+        if (loci.size() < 2) {
+            return;
+        }
         // cout << chromosome->name() << " " << start << "-" << end << " ";
         // cout << pos.size() << "SNPs\n";
     // } else {

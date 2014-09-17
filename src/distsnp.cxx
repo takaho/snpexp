@@ -8,6 +8,7 @@
 #include <fstream>
 #include <cstdlib>
 #include <iomanip>
+#include <limits>
 
 #ifndef HAVE_BAM_H
 #error You do not have bam library
@@ -35,7 +36,6 @@ using std::atoi;
 using std::hex;
 using std::dec;
 using std::endl;
-
 using namespace tkbio;
 
 using tktools::util::get_argument_string;
@@ -47,6 +47,8 @@ using tktools::io::get_file_size;
 using tktools::split_items;
 using tktools::bio::convert_chromosome_to_code;
 using tktools::bio::convert_code_to_chromosome;
+
+const char FILE_SEPARATOR = '/';
 
 namespace {
     bool cache_position_comparator(const cache_position* lhs, const cache_position* rhs) {
@@ -60,7 +62,6 @@ namespace {
 
 
 //#define TEST 1
-const char FILE_SEPARATOR = '/';
 dbsnp_locus::dbsnp_locus(size_t position, string reference, string alternative, int num_strains) {
     _position = position;
     _reference = reference;
@@ -354,24 +355,6 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
                 delete _cache[i];
             }
             _cache.erase(_cache.begin(), _cache.end());
-            // int tolerance = CACHE_RETAIN_TOLERANCE;
-            // for (int i = 0; i < (int)_cache.size(); i++) {
-            //     if ((int)_cache[i]->position() < start - tolerance) {
-            //         delete _cache[i];
-            //     } else {
-            //         _cache.erase(_cache.begin(), _cache.begin() + i);
-            //         break;
-            //     }
-            // }
-            // for (int i = (int)_cache.size() - 1; i >= 0; i--) {
-            //     if ((int)_cache[i]->position() > end + tolerance * 2) {
-            //         for (int j = i; j < (int)_cache.size(); j++) {
-            //             delete _cache[j];
-            //         }
-            //         _cache.erase(_cache.begin() + i, _cache.end());
-            //         break;
-            //     }
-            // }
         }
     }
     if (_indicators.size() == 0) {
@@ -437,6 +420,14 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
         }
         index++;
     }
+    if (index == _indicators.size() || _indicators[index]->chromosome != chromosome) {
+        _cache_range_end = std::numeric_limits<int>::max();
+        //cout << "out of range " << _cache_range_end << endl;
+    // } else {
+    //     cout << index << " / " << _indicators.size() << endl;
+    //     cout << _indicators[index]->chromosome << " / " << chromosome << endl;
+    }
+
     // for (int i = 0; i < (int)_cache.size(); i++) {
     //     delete _cache[i];
     // }

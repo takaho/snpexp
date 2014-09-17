@@ -40,6 +40,8 @@ using tktools::split_items;
 using tktools::bio::convert_chromosome_to_code;
 using tktools::bio::convert_code_to_chromosome;
 
+const char FILE_SEPARATOR = '/';
+
 //#define TEST 1
 
 recfragment::recfragment(int chromosome, bam1_t* seq, int num, const set<int>& accepted) {
@@ -162,6 +164,9 @@ void recfragment::initialize(bam1_t* read, const set<int>& positions) {
             }
             spos += slen;
         } else if (op == BAM_CSOFT_CLIP || op == BAM_CHARD_CLIP) { // S or H
+            break;
+        } else if (op == BAM_CREF_SKIP) {
+            spos += len;
             break;
         } else if (op == BAM_CBACK) {
             break;
@@ -456,6 +461,9 @@ void chromosome_seq::set_chromosome(int num) {
 }
 
 unsigned char chromosome_seq::get_base_code(int pos) const {
+    if (_sequence == NULL) {
+        const_cast<chromosome_seq*>(this)->load_sequence_from_cache();
+    }
     unsigned char code = _sequence[pos >> 1] >> ((pos & 1) == 0 ? 4 : 0) & 0x0f;
     return code;
 }
@@ -556,24 +564,150 @@ void chromosome_seq::set_sequence(int length, char const* codes) {
     }
 }
 
+string chromosome_seq::get_cache_filename(const char* filename) {
+    int slen = strlen(filename);
+    string dirname;
+    string basename;
+    for (int i = slen - 1; i >= 0; i--) {
+        if (filename[i] == FILE_SEPARATOR) {
+            dirname = string(filename).substr(0, i + 1);
+            basename = string(filename).substr(i + 1);
+            break;
+        }
+    }
+    return dirname + "." + basename + ".chromcache";
+}
+
+const unsigned int chromosome_seq::MAGIC_NUMBER = 0xcac17e88;
+void chromosome_seq::save_cache(const char* filename, const vector<chromosome_seq*>& chromosomes) throw (exception) {
+    ofstream fo(filename);
+    cerr << "saving to " << filename << endl;
+    if (fo.is_open() == false) {
+        throw invalid_argument("cannot open " + string(filename));
+    }
+    fo.write(reinterpret_cast<const char*>(&MAGIC_NUMBER), sizeof(unsigned int));
+    int num = chromosomes.size();
+    cerr << num << " chromosomes\n";
+    fo.write(reinterpret_cast<char*>(&num), sizeof(int));
+    for (int i = 0; i < num; i++) {
+        const chromosome_seq* seq = chromosomes[i];
+        int slen = seq->_name.size() + 1;
+        cout << i << ":" << seq->_name << endl;
+        fo.write(reinterpret_cast<char*>(&slen), sizeof(int));
+        fo.write(seq->_name.c_str(), sizeof(char) * slen);
+        fo.write(reinterpret_cast<char const*>(&(seq->_length)), sizeof(int));
+        fo.write(reinterpret_cast<char const*>(&(seq->_code)), sizeof(int));
+        fo.write(reinterpret_cast<char const*>(&(seq->_bam_code)), sizeof(int));
+
+        slen = seq->_filename.size() + 1;
+        fo.write(reinterpret_cast<char const*>(&slen), sizeof(int));
+        fo.write(seq->_filename.c_str(), sizeof(char) * slen);
+        fo.write(reinterpret_cast<char const*>(&(seq->_data_start)), sizeof(size_t));
+        fo.write(reinterpret_cast<char const*>(&(seq->_data_end)), sizeof(size_t));
+        
+    }
+    fo.close();
+}
+
+vector<chromosome_seq*> chromosome_seq::load_from_cache(const char* filename) throw (exception) {
+    vector<chromosome_seq*> seqs;
+    ifstream fi(filename);
+    if (fi.is_open() == false) {
+        throw invalid_argument("cannot open " + string(filename));
+    }
+    unsigned int magic;
+    fi.read(reinterpret_cast<char*>(&magic), sizeof(unsigned int));
+    if (magic != MAGIC_NUMBER) {
+        throw runtime_error("the file does not the cache");
+    }
+    int num;
+    fi.read(reinterpret_cast<char*>(&num), sizeof(int));
+    for (int i = 0; i < num; i++) {
+        chromosome_seq* seq = new chromosome_seq();;
+        int slen;
+        fi.read(reinterpret_cast<char*>(&slen), sizeof(int));
+        char* buffer = new char[slen];
+        fi.read(buffer, sizeof(char) * slen);//seq->_name.c_str(), sizeof(char) * slen);
+        seq->_name = buffer;
+        delete[] buffer;
+
+        fi.read(reinterpret_cast<char*>(&(seq->_length)), sizeof(int));
+        fi.read(reinterpret_cast<char*>(&(seq->_code)), sizeof(int));
+        fi.read(reinterpret_cast<char*>(&(seq->_bam_code)), sizeof(int));
+
+        //slen = seq->_filename.size() + 1;
+        fi.read(reinterpret_cast<char*>(&slen), sizeof(int));
+        buffer = new char[slen];
+        fi.read(buffer, sizeof(char) * slen);
+        seq->_filename = buffer;
+        delete[] buffer;
+        fi.read(reinterpret_cast<char*>(&(seq->_data_start)), sizeof(size_t));
+        fi.read(reinterpret_cast<char*>(&(seq->_data_end)), sizeof(size_t));
+
+        seqs.push_back(seq);
+    }
+    fi.close();
+    return seqs;
+}
+
+
+void chromosome_seq::load_sequence_from_cache() throw (exception) {
+    ifstream fi(_filename.c_str());
+    if (fi.is_open() == false) {
+        throw invalid_argument("cannot open " + _filename);
+    }
+    fi.seekg(_data_start);
+    size_t bufsize = _data_end - _data_start;
+    size_t tail = bufsize + (bufsize % 2);
+    char* buffer = new char[bufsize + (bufsize % 2)];
+    buffer[tail - 1] = (unsigned char)0;
+    fi.read(buffer, sizeof(char) * bufsize);
+    delete[] _sequence;
+    _sequence = new unsigned char[bufsize / 2 + 1];
+    unsigned char* ptr = _sequence;
+    for (int i = 0; i < bufsize; i+= 2) {
+        char c1 = buffer[i];
+        char c2 = buffer[i+1];
+        *ptr = (base2code(c1) << 4) || base2code(c2);
+        ptr++;
+    }
+    fi.close();
+}
+
 vector<chromosome_seq*> chromosome_seq::load_genome(const char* filename) throw (exception) {
+    string filename_cache = get_cache_filename(filename);
+    if (tktools::io::file_exists(filename_cache.c_str())) {
+        try {
+            return load_from_cache(filename_cache.c_str());
+        } catch (exception& e) {
+            cerr << e.what() << endl;
+            cerr << "discard current cache file\n";
+        }
+    }
     vector<chromosome_seq*> chromosomes;
     ifstream fi(filename);
     if (!fi.is_open()) {
         throw invalid_argument("cannot open genome file");
     }
     int length = 0;
-    int size_buffer = 300000000;
-    char* buffer = new char[size_buffer];
-    buffer[0] = 0;
+    //int size_buffer = 300000000;
+    //char* buffer = new char[size_buffer];
+    //buffer[0] = 0;
     int chrmcode = -1;
     chromosome_seq* seq = NULL;
+    //size_t filepos_start = 0;
+    //size_t filepos_end = 0;
     while (!fi.eof()) {
         string line;
+        size_t fpos = fi.tellg();
         getline(fi, line);
         if (line.c_str()[0] == '>') {
             if (seq != NULL) {
-                seq->set_sequence(length, buffer);
+                seq->_length = length;
+                seq->_sequence = NULL;
+                //seq->set_sequence(length, buffer);
+                seq->_data_end = fpos;
+                cerr << seq->name() << "\t" << seq->_data_start << "-" << seq->_data_end << endl;
                 chromosomes.push_back(seq);
                 seq = NULL;
 #ifdef TEST
@@ -586,44 +720,56 @@ vector<chromosome_seq*> chromosome_seq::load_genome(const char* filename) throw 
                 seq = new chromosome_seq();
                 seq->_name = line.substr(1, line.size());
                 seq->_code = chrmcode;
+                seq->_data_start = fi.tellg();
             } else {
                 seq = NULL;
             }
-        } else if (seq != NULL && length < size_buffer) {
+        } else if (seq != NULL) {// && length < size_buffer) {
             const char* ptr = line.c_str();
-            for (int i = 0; i < (int)line.size(); i++) {
-                char base = '\0';
-                switch (ptr[i]) {
-                case 'a': case 'A':
-                    base = 'A'; break;
-                case 'c': case 'C':
-                    base = 'C'; break;
-                case 'g': case 'G':
-                    base = 'G'; break;
-                case 't': case 'T':
-                    base = 'T'; break;
-                case '-': 
-                    base = '-'; break;
-                default: // 'N'
-                    base = 'N'; break;
-                }
-                if (base != '\0') {
-                    if (length >= size_buffer) {
-                        cerr << "too much nucleotides > " << size_buffer << endl;
-                        //buffer[size_buffer-1] = '\0';
-                    } else {
-                        buffer[length++] = base;
-                    }
+            for (;;) {
+                char base = *ptr++;
+                if ((base >= 'A' && base <= 'Z') || (base >= 'a' && base <= 'z')) {
+                    length++;
+                } else if (base == '\0') {
+                    break;
                 }
             }
+            // for (int i = 0; i < (int)line.size(); i++) {
+            //     char base = '\0';
+            //     switch (ptr[i]) {
+            //     case 'a': case 'A':
+            //         base = 'A'; break;
+            //     case 'c': case 'C':
+            //         base = 'C'; break;
+            //     case 'g': case 'G':
+            //         base = 'G'; break;
+            //     case 't': case 'T':
+            //         base = 'T'; break;
+            //     case '-': 
+            //         base = '-'; break;
+            //     default: // 'N'
+            //         base = 'N'; break;
+            //     }
+            //     if (base != '\0') {
+            //         if (length >= size_buffer) {
+            //             cerr << "too much nucleotides > " << size_buffer << endl;
+            //             //buffer[size_buffer-1] = '\0';
+            //         } else {
+            //             buffer[length++] = base;
+            //         }
+            //     }
+            // }
         }
     }
     if (seq != NULL) {
-        seq->set_sequence(length, buffer);
+        seq->_length = length;
+        seq->_data_end = fi.tellg();
+        //seq->set_sequence(length, buffer);
         chromosomes.push_back(seq);
     }
-    delete[] buffer;
+    //delete[] buffer;
     fi.close();
+    save_cache(filename_cache.c_str(), chromosomes);
     return chromosomes;
 }
 

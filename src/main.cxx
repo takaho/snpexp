@@ -166,13 +166,12 @@ int main(int argc, char** argv) {
                 cerr << "loading VCF\n";
             }
             dbsnp = dbsnp_file::load_dbsnp(filename_snps);
-            // vector<dbsnp_locus const*> snps;
-            // snps = dbsnp->get_snps("4",  40000000, 50000000);
+            vector<dbsnp_locus const*> snps;
+            // snps = dbsnp->get_snps("1",  190000000, 200000000);
             // cout << snps.size() << endl;
-            // for (int i = 0; i < 10; i++) {
-            //     cout << snps[i]->to_string() << endl;
-            // }
-            // snps = dbsnp->get_snps("Y", 60000000, 70000000);
+            // snps = dbsnp->get_snps("1",  195000000, 200000000);
+            // cout << snps.size() << endl;
+            // snps = dbsnp->get_snps("1",  200000000, 210000000);
             // cout << snps.size() << endl;
             // exit(0);
 
@@ -206,6 +205,12 @@ int main(int argc, char** argv) {
             cerr << "loading genomic sequences " << flush;
         }
         vector<chromosome_seq*> fasta_files = chromosome_seq::load_genome(filename_genome);
+        if (verbose) {
+            for (int i = 0; i < (int)fasta_files.size(); i++) {
+                cerr << "chromosome #" << (i + 1) << ":" << fasta_files[i]->name() << "\t" << fasta_files[i]->length() << endl;
+            }
+        }
+
 //        map<int,pair<int,unsigned char*> >  genome = load_genome(filename_genome);
         if (verbose) {
             cerr << fasta_files.size() << " chromosomes\n";
@@ -254,7 +259,7 @@ second
 
         // status
         // 0x00   : read next
-        // 0x01   : read of nect section is stored
+        // 0x01   : read of next section is stored
         // 0x02   : different chromosome
         // 0x04   : touched
         // 0x80   : reach end
@@ -264,7 +269,8 @@ second
             vector<recfragment*> fragments;
             set<int> snp_positions;
             if (dbsnp != NULL && chromosome != NULL) {
-                vector<dbsnp_locus const*> snps = dbsnp->get_snps(chromosome->name(), analysis_start, analysis_end);
+                vector<dbsnp_locus const*> snps;
+                snps = dbsnp->get_snps(chromosome->name(), analysis_start, analysis_end);
                 //cout << chromosome->name() << ":" << analysis_start << "-" << analysis_end << " // " << snps.size() << "\n";
                 for (int i = 0; i < (int)snps.size(); i++) {
                     snp_positions.insert(snps[i]->position());
@@ -345,14 +351,18 @@ second
                 recfragment::bundle_pairs(fragments);
                 // process
                 if (verbose) {
-                    cerr << chromosome->name() << ":" << analysis_start << "-" << analysis_end << " // " << fragments.size() << " // " << snp_positions.size() << "       \r";
+                    cerr << chromosome->name() << ":" << analysis_start << "-" << analysis_end << " // " << fragments.size() << " // " << snp_positions.size() << " ; " << num_chr_finish << "/" << num_files << "       \r";
                 }
                 processor->process_fragments(fragments, chromosome, analysis_start, analysis_end, *ost);
             }
+            if (analysis_start > 195003283) {//194960775) {
+                cout << "checking point\n";
+            }
 
-            if (num_chr_finish == num_files) { // change chromosome
+            if (num_chr_finish == num_files) {// || chromosome->length() <= analysis_start) { // change chromosome
                 int next_chr = -1;
                 for (int i = 0; i < num_files; i++) {
+                    if (status[i] == 0xff) continue;
                     bam1_t const* r = reads[i];
                     if (r->core.tid != current_bamchrm && (next_chr < 0 || r->core.tid < next_chr)) {
                         next_chr = r->core.tid;
@@ -400,7 +410,7 @@ second
                 int tail = 0;
                 for (int i = 0; i < (int)fragments.size(); i++) {
                     const recfragment* f = fragments[i];
-                    if (f->position3() > analysis_end) {
+                    if (f->position3() > analysis_start) {
                         fragments[tail++] = fragments[i];
                     } else {
                         delete f;
