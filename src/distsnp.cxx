@@ -420,7 +420,7 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
         }
         index++;
     }
-    if (index == _indicators.size() || _indicators[index]->chromosome != chromosome) {
+    if (index == (int)_indicators.size() || _indicators[index]->chromosome != chromosome) {
         _cache_range_end = std::numeric_limits<int>::max();
         //cout << "out of range " << _cache_range_end << endl;
     // } else {

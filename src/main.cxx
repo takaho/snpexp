@@ -117,7 +117,7 @@ int main(int argc, char** argv) {
 
         for (int i = 2; i < argc; i++) {
             if (argv[i][0] != '-' && tktools::io::file_exists(argv[i]) && strcmp(argv[i] + strlen(argv[i]) - 4, ".bam") == 0) {
-                cout << argv[i] << endl;
+                //cout << argv[i] << endl;
                 filenames.push_back(argv[i]);
             }
         }
@@ -354,6 +354,7 @@ second
                     cerr << chromosome->name() << ":" << analysis_start << "-" << analysis_end << " // " << fragments.size() << " // " << snp_positions.size() << " ; " << num_chr_finish << "/" << num_files << "       \r";
                 }
                 processor->process_fragments(fragments, chromosome, analysis_start, analysis_end, *ost);
+                *ost << std::flush;
             }
             if (analysis_start > 195003283) {//194960775) {
                 cout << "checking point\n";

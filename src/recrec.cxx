@@ -665,7 +665,7 @@ void chromosome_seq::load_sequence_from_cache() throw (exception) {
     delete[] _sequence;
     _sequence = new unsigned char[bufsize / 2 + 1];
     unsigned char* ptr = _sequence;
-    for (int i = 0; i < bufsize; i+= 2) {
+    for (size_t i = 0; i < bufsize; i+= 2) {
         char c1 = buffer[i];
         char c2 = buffer[i+1];
         *ptr = (base2code(c1) << 4) || base2code(c2);
