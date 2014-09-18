@@ -51,10 +51,13 @@ namespace tkbio {
         float _minimum_recombination_composition;
         int _snp_stretches; // how many snps are required to define genotype (1)
         int _gap_tolerance; // how many
+        double _allele_balance;
     public:
         recombination_detector(int coverage=25, float hetero_threshold=0.25f,
                                float recomb_threshold=0.05f);
 
+        void set_allele_balance(double ratio);
+        double allele_balance() const { return _allele_balance; }
         int coverage_threshold() const { return _coverage; }
         float heterozygosity_threshold() const { return _minimum_minor_ratio; }
         virtual void process_fragments(const vector<recfragment*>& fragments,

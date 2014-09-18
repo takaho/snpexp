@@ -107,11 +107,20 @@ recombination_detector::recombination_detector(int coverage, float hetero_thresh
     _minimum_recombination_composition = recom_threshold;
     _snp_stretches = 1;
     _gap_tolerance = 0;
+    _allele_balance = 0.0;
 }
 
 bool recombination_detector::check_acceptable_recombination(int counts[4]) const {
     int total = counts[0] + counts[1] + counts[2] + counts[3];
     if (total < _minimum_recombination_reads) {
+        return false;
+    }
+    int a1 = counts[0] + counts[1];
+    int A1 = counts[2] + counts[3];
+    int a2 = counts[0] + counts[2];
+    int A2 = counts[1] + counts[3];
+    if (a1 * _allele_balance > A1 || a1 < _allele_balance * A1 
+        || a2 * _allele_balance > A2 || a2 < _allele_balance * A2) {
         return false;
     }
     int thr = (int)(total * _minimum_recombination_composition + 0.5);
@@ -123,7 +132,14 @@ bool recombination_detector::check_acceptable_recombination(int counts[4]) const
     return true;
 }
 
-namespace {
+void recombination_detector::set_allele_balance(double ratio) {
+    if (ratio <= 0.0) {
+        _allele_balance = 0.0;
+    } else if (ratio > 1.0) {
+        _allele_balance = 1.0 / ratio;
+    } else {
+        _allele_balance = ratio;
+    }
 }
 
 void recombination_detector::process_fragments(const vector<recfragment*>& fragments,

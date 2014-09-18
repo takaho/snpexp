@@ -91,6 +91,8 @@ namespace tkbio {
         ~dbsnp_file();
         int strain_number() const { return _strains.size(); }
         const string& get_strain(int index) const { return _strains[index]; }
+        const string& cached_chromosome() const { return _cache_chromosome; }
+        std::pair<int,int> cached_range() const { return std::make_pair(_cache_range_start, _cache_range_end); }
         vector<dbsnp_locus const*> get_snps(string chromosome, int start, int end) const throw (exception);
         void add_file_position(const string& chrom, size_t pos, size_t fpos) {
             _indicators.push_back(new cache_position(chrom, pos, fpos));

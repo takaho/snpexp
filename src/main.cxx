@@ -78,6 +78,7 @@ namespace {
         cerr << " -o <filename> : output filename (stdout)\n";
         cerr << " -q <number>   : threshold of mapping quality (10)\n";
         cerr << " -D <number>   : display verbosity (0:all, 1:countable, 2:hetero)\n";
+        cerr << " --pared       : paired\n";
     }
 }
 
@@ -89,6 +90,7 @@ int main(int argc, char** argv) {
         double heterozygosity = get_argument_float(argc, argv, "H", 0.25);
         bool verbose = has_option(argc, argv, "verbose");
         int window_size = get_argument_integer(argc, argv, "w", 3000);
+        bool paired = has_option(argc, argv, "-paired");
         int window_margin = get_argument_integer(argc, argv, "m", 500);
         const char* filename_genome = get_argument_string(argc, argv, "g", NULL);
         const char* filename_output = get_argument_string(argc, argv, "o", NULL);
@@ -98,6 +100,7 @@ int main(int argc, char** argv) {
 	int display_mode  = get_argument_integer(argc, argv, "D", 1);
         dbsnp_file* dbsnp = NULL;
         vector<string> filenames;
+        double allele_balance = get_argument_float(argc, argv, "b", 0.5);
 
         int mode = 0;
         fragment_processor* processor = NULL;
@@ -149,7 +152,10 @@ int main(int argc, char** argv) {
         }
 
         if (mode == 0) {
-            processor = new recombination_detector(coverage, heterozygosity);
+            recombination_detector* p = new recombination_detector(coverage, heterozygosity);
+            p->set_allele_balance(allele_balance);
+            //processor = new recombination_detector(coverage, heterozygosity);
+            processor = p;
             processor->set_display_mode(display_mode);
         } else if (mode == 1) {
             snp_enumerator* _proc = new snp_enumerator(coverage, heterozygosity);
@@ -166,24 +172,26 @@ int main(int argc, char** argv) {
                 cerr << "loading VCF\n";
             }
             dbsnp = dbsnp_file::load_dbsnp(filename_snps);
-             // vector<dbsnp_locus const*> snps;
-             // int width = 5000;
-             // for (int start = 195104338; start < 195174338 + 100000; start += 5000) {
-             //     cout << start << ", " << start + width << endl;
-             //     snps = dbsnp->get_snps("1",  start, start + width);
-             //     for (int i = 0; i < (int)snps.size(); i++) {
-             //         cout << snps[i]->to_string() << endl;
-             //     }
-             // }
-             //  // snps = dbsnp->get_snps("1",  2500, 5000);
-             //  // for (int i = 0; i < (int)snps.size(); i++) {
-             //  //     cout << snps[i]->to_string() << endl;
-             //  // }
-             //  // snps = dbsnp->get_snps("1",  10000, 20000);
-             //  // for (int i = 0; i < (int)snps.size(); i++) {
-             //  //     cout << snps[i]->to_string() << endl;
-             //  // }
-             //  exit(0);
+            // vector<dbsnp_locus const*> snps;
+            // int width = 5000;
+            // int start_pos = 10000000;
+            // for (int start = start_pos; start < start_pos + width * 100; start += width){
+            //     //for (int start = 195104338; start < 195174338 + 100000; start += 5000) {
+            //     cout << start << ", " << start + width << endl;
+            //     snps = dbsnp->get_snps("10",  start, start + width);
+            //     for (int i = 0; i < (int)snps.size(); i++) {
+            //         cout << snps[i]->to_string() << endl;
+            //     }
+            // }
+            // //  // snps = dbsnp->get_snps("1",  2500, 5000);
+            //  //  // for (int i = 0; i < (int)snps.size(); i++) {
+            //  //  //     cout << snps[i]->to_string() << endl;
+            //  //  // }
+            //  //  // snps = dbsnp->get_snps("1",  10000, 20000);
+            //  //  // for (int i = 0; i < (int)snps.size(); i++) {
+            //  //  //     cout << snps[i]->to_string() << endl;
+            //  //  // }
+            //   exit(0);
              //cout << snps.size() << endl;
              // snps = dbsnp->get_snps("1",  195000000, 200000000);
             // cout << snps.size() << endl;
@@ -280,21 +288,30 @@ second
         // 0x04   : touched
         // 0x80   : reach end
         bool skipping = false;
+        bool chromosome_not_included = false;
         while (true) {
             int num_chr_finish = 0;
             vector<recfragment*> fragments;
             set<int> snp_positions;
             if (dbsnp != NULL && chromosome != NULL) {
                 vector<dbsnp_locus const*> snps;
-//                if (chromosome->name() != "chr1") {
-//                    cout << "##########" << chromosome->name() << endl;
-                snps = dbsnp->get_snps(chromosome->name(), analysis_start, analysis_end);
-//                }
-                //cout << chromosome->name() << ":" << analysis_start << "-" << analysis_end << " // " << snps.size() << "\n";
-                for (int i = 0; i < (int)snps.size(); i++) {
-                    snp_positions.insert(snps[i]->position());
+                //if (verbose)  cerr << ".";
+                try {
+                    if (!chromosome_not_included) {
+                        snps = dbsnp->get_snps(chromosome->name(), analysis_start, analysis_end);
+                        //if (verbose)  cerr << ".";
+                        for (int i = 0; i < (int)snps.size(); i++) {
+                            snp_positions.insert(snps[i]->position());
+                        }
+                    }
+                } catch (exception& e) {
+                    // not included
+                    chromosome_not_included = true;
                 }
+                //if (verbose)  cerr << ".\n";
             }
+
+            // load reads
             for (int i = 0; i < num_files; i++) {
                 if ((status[i] & 0x04) != 0) {
                     bam1_t const* r = reads[i];
@@ -307,7 +324,11 @@ second
                             } else {
                                 frag = new recfragment(current_chromosome, reads[i], i);
                             }
-                            fragments.push_back(frag);
+                            if (chromosome_not_included) {
+                                delete frag;
+                            } else {
+                                fragments.push_back(frag);
+                            }
                             if (status[i] != 0xff) {
                                 status[i] = 0x00;
                             }
@@ -337,7 +358,9 @@ second
                             if (current_bamchrm != r->core.tid) { // next chromosome
                                 status[i] = 0x02 | 0x04;
                                 num_chr_finish ++;
-                                //cout << "change chromosome\n";
+                                if (verbose) {
+                                    cerr << "change chromosome       \n";
+                                }
                                 break;
                             } else if (r->core.pos > retain_end) { // next window
                                 status[i] = 0x01 | 0x04;
@@ -346,14 +369,16 @@ second
                             } else {
                                 if (fragments.size() <= max_fragments && chromosome != NULL) {
 //                            cout << "PUT2" << endl;
-                                    recfragment* frag;
-                                    if (dbsnp != NULL) {
-                                        frag = new recfragment(current_chromosome, reads[i], i, snp_positions);
-                                    } else {
-                                        frag = new recfragment(current_chromosome, reads[i], i);
-                                    }
+                                    if (!chromosome_not_included) {
+                                        recfragment* frag;
+                                        if (dbsnp != NULL) {
+                                            frag = new recfragment(current_chromosome, reads[i], i, snp_positions);
+                                        } else {
+                                            frag = new recfragment(current_chromosome, reads[i], i);
+                                        }
 //                                    recfragment* frag = new recfragment(current_chromosome, reads[i], i);
-                                    fragments.push_back(frag);
+                                        fragments.push_back(frag);
+                                    }
                                     status[i] |= 0x04;
                                 }
                             }
@@ -367,19 +392,27 @@ second
 
             if ((int)fragments.size() > coverage && chromosome != NULL) {
                 // integrate pairs
-                recfragment::bundle_pairs(fragments);
+                if (paired) {
+                    recfragment::bundle_pairs(fragments);
+                }
                 // process
                 if (verbose) {
-                    cerr << chromosome->name() << ":" << analysis_start << "-" << analysis_end << " // " << fragments.size() << " // " << snp_positions.size() << "       \r";
+                    cerr << chromosome->name() << ":" << analysis_start << "-" << analysis_end << " // " << fragments.size() << " // " << snp_positions.size();
+                    if (dbsnp != NULL) {
+                        pair<int,int> range = dbsnp->cached_range();
+                        cerr << range.first << "," << range.second;
+                    }
+                    cerr << "       \r";
                 }
-                if (chromosome->name() != "chr1") {
-                processor->process_fragments(fragments, chromosome, analysis_start, analysis_end, *ost);
+                if (!chromosome_not_included) {
+                    processor->process_fragments(fragments, chromosome, analysis_start, analysis_end, *ost);
+                }
                 *ost << std::flush;
-                }
             }
 
             if (num_chr_finish == num_files) {// || chromosome->length() <= analysis_start) { // change chromosome
                 int next_chr = -1;
+                chromosome_not_included = false;
                 for (int i = 0; i < num_files; i++) {
                     if (status[i] == 0xff) continue;
                     bam1_t const* r = reads[i];
@@ -390,9 +423,9 @@ second
                 if (next_chr < 0) {
                     break;
                 }
-                // if (verbose) {
-                //     cerr << "change chromosome  " << headers[0]->target_name[next_chr] << endl;
-                // }
+                if (verbose) {
+                    cerr << "change chromosome  " << headers[0]->target_name[next_chr] << endl;
+                }
                 current_bamchrm = next_chr;
                 
                 chromosome = NULL;
@@ -403,7 +436,9 @@ second
                         chromosome = fasta_files[j];
                     }
                 }
+                // the chromosome in bam file is not included fasta file
                 skipping = (chromosome == NULL);
+
 //                } else {
 //                }
 

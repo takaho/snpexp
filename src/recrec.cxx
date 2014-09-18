@@ -521,6 +521,11 @@ unsigned char chromosome_seq::get_base_code(int pos) const {
     if (_sequence == NULL) {
         const_cast<chromosome_seq*>(this)->load_sequence_from_cache();
     }
+    if (pos < 1 || pos > _length) {
+        return -1;
+    } else {
+        pos--;
+    }
     unsigned char code = _sequence[pos >> 1] >> ((pos & 1) == 0 ? 4 : 0) & 0x0f;
     return code;
 }
@@ -532,11 +537,9 @@ namespace {
 int chromosome_seq::get_base_id(int pos) const {
     unsigned char code = _sequence[pos >> 1] >> ((pos & 1) == 0 ? 4 : 0) & 0x0f;
     return _base_identifiers[code];
-    //return code;
 }
 
 char chromosome_seq::get_base(int pos) const {
-    //unsigned char code = _sequence[pos >> 1] >> ((pos & 1) == 0 ? 4 : 0) & 0x0f;
     return _bamnucleotide[get_base_code(pos)];
 }
 
@@ -715,12 +718,11 @@ void chromosome_seq::load_sequence_from_cache() throw (exception) {
     }
     fi.seekg(_data_start);
     size_t bufsize = _data_end - _data_start;
-    size_t tail = bufsize + (bufsize % 2);
     char* buffer = new char[bufsize + (bufsize % 2)];
-    buffer[tail - 1] = (unsigned char)0;
     fi.read(buffer, sizeof(char) * bufsize);
     delete[] _sequence;
     _sequence = new unsigned char[bufsize / 2 + 1];
+    _sequence[bufsize / 2] = (unsigned char)0;
     unsigned char* ptr = _sequence;
     for (size_t i = 0; i < bufsize; i+= 2) {
         char c1 = buffer[i];
@@ -729,6 +731,7 @@ void chromosome_seq::load_sequence_from_cache() throw (exception) {
         ptr++;
     }
     fi.close();
+    delete[] buffer;
 }
 
 vector<chromosome_seq*> chromosome_seq::load_genome(const char* filename) throw (exception) {
@@ -747,13 +750,8 @@ vector<chromosome_seq*> chromosome_seq::load_genome(const char* filename) throw 
         throw invalid_argument("cannot open genome file");
     }
     int length = 0;
-    //int size_buffer = 300000000;
-    //char* buffer = new char[size_buffer];
-    //buffer[0] = 0;
     int chrmcode = -1;
     chromosome_seq* seq = NULL;
-    //size_t filepos_start = 0;
-    //size_t filepos_end = 0;
     while (!fi.eof()) {
         string line;
         size_t fpos = fi.tellg();
