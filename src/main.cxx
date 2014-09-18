@@ -166,10 +166,26 @@ int main(int argc, char** argv) {
                 cerr << "loading VCF\n";
             }
             dbsnp = dbsnp_file::load_dbsnp(filename_snps);
-            vector<dbsnp_locus const*> snps;
-            // snps = dbsnp->get_snps("1",  190000000, 200000000);
-            // cout << snps.size() << endl;
-            // snps = dbsnp->get_snps("1",  195000000, 200000000);
+             // vector<dbsnp_locus const*> snps;
+             // int width = 5000;
+             // for (int start = 195104338; start < 195174338 + 100000; start += 5000) {
+             //     cout << start << ", " << start + width << endl;
+             //     snps = dbsnp->get_snps("1",  start, start + width);
+             //     for (int i = 0; i < (int)snps.size(); i++) {
+             //         cout << snps[i]->to_string() << endl;
+             //     }
+             // }
+             //  // snps = dbsnp->get_snps("1",  2500, 5000);
+             //  // for (int i = 0; i < (int)snps.size(); i++) {
+             //  //     cout << snps[i]->to_string() << endl;
+             //  // }
+             //  // snps = dbsnp->get_snps("1",  10000, 20000);
+             //  // for (int i = 0; i < (int)snps.size(); i++) {
+             //  //     cout << snps[i]->to_string() << endl;
+             //  // }
+             //  exit(0);
+             //cout << snps.size() << endl;
+             // snps = dbsnp->get_snps("1",  195000000, 200000000);
             // cout << snps.size() << endl;
             // snps = dbsnp->get_snps("1",  200000000, 210000000);
             // cout << snps.size() << endl;
@@ -201,9 +217,9 @@ int main(int argc, char** argv) {
             }
             ost = fo;
         }
-        if (verbose) {
-            cerr << "loading genomic sequences " << flush;
-        }
+        // if (verbose) {
+        //     cerr << "loading genomic sequences " << flush;
+        // }
         vector<chromosome_seq*> fasta_files = chromosome_seq::load_genome(filename_genome);
         if (verbose) {
             for (int i = 0; i < (int)fasta_files.size(); i++) {
@@ -212,9 +228,9 @@ int main(int argc, char** argv) {
         }
 
 //        map<int,pair<int,unsigned char*> >  genome = load_genome(filename_genome);
-        if (verbose) {
-            cerr << fasta_files.size() << " chromosomes\n";
-        }
+        // if (verbose) {
+        //     cerr << fasta_files.size() << " chromosomes\n";
+        // }
 
         // select standard snps only
         // if (filename_snps != NULL) {
@@ -270,7 +286,10 @@ second
             set<int> snp_positions;
             if (dbsnp != NULL && chromosome != NULL) {
                 vector<dbsnp_locus const*> snps;
+//                if (chromosome->name() != "chr1") {
+//                    cout << "##########" << chromosome->name() << endl;
                 snps = dbsnp->get_snps(chromosome->name(), analysis_start, analysis_end);
+//                }
                 //cout << chromosome->name() << ":" << analysis_start << "-" << analysis_end << " // " << snps.size() << "\n";
                 for (int i = 0; i < (int)snps.size(); i++) {
                     snp_positions.insert(snps[i]->position());
@@ -351,10 +370,12 @@ second
                 recfragment::bundle_pairs(fragments);
                 // process
                 if (verbose) {
-                    cerr << chromosome->name() << ":" << analysis_start << "-" << analysis_end << " // " << fragments.size() << " // " << snp_positions.size() << " ; " << num_chr_finish << "/" << num_files << "       \r";
+                    cerr << chromosome->name() << ":" << analysis_start << "-" << analysis_end << " // " << fragments.size() << " // " << snp_positions.size() << "       \r";
                 }
+                if (chromosome->name() != "chr1") {
                 processor->process_fragments(fragments, chromosome, analysis_start, analysis_end, *ost);
                 *ost << std::flush;
+                }
             }
 
             if (num_chr_finish == num_files) {// || chromosome->length() <= analysis_start) { // change chromosome
