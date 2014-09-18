@@ -91,7 +91,7 @@ int main(int argc, char** argv) {
         bool verbose = has_option(argc, argv, "verbose");
         int window_size = get_argument_integer(argc, argv, "w", 3000);
         bool paired = has_option(argc, argv, "-paired");
-        int window_margin = get_argument_integer(argc, argv, "m", 500);
+        int window_margin = get_argument_integer(argc, argv, "m", 0);
         const char* filename_genome = get_argument_string(argc, argv, "g", NULL);
         const char* filename_output = get_argument_string(argc, argv, "o", NULL);
         const char* filename_snps = get_argument_string(argc, argv, "V", NULL);
@@ -126,8 +126,10 @@ int main(int argc, char** argv) {
         }
 
         int num_files = filenames.size();
-        if (window_margin * 4 > window_size) {
-            window_margin = window_size / 4;
+        if (window_margin * 6 > window_size) {
+            window_margin = window_size / 6;
+        } else if (window_margin < 100) {
+            window_margin = 100;
         }
 
         if (verbose) {
