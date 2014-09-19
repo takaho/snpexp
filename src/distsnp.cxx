@@ -84,7 +84,7 @@ dbsnp_locus::dbsnp_locus(size_t position, const string& rsid, const string& refe
     _num_strains = num_strains;
     _strains = new unsigned char[_num_strains];
     for (int i = 0; i < _num_strains; i++) {
-      _strains[i] = 0x00;
+        _strains[i] = 0x00;
     }
 }
 
@@ -92,55 +92,59 @@ dbsnp_locus::~dbsnp_locus() {
     delete[] _strains;
 }
 
+unsigned char dbsnp_locus::get_genotype(int strain_index) const {
+    return _strains[strain_index];
+}
+
 void dbsnp_locus::set_genotype(int index, char const* info) {
-  if (index < 0 || index > _num_strains) {
-    throw std::out_of_range("cannot set genotype at the index");
-  }
-  if (_strains == NULL) {
-    _strains = new unsigned char[_num_strains];
-    for (int i = 0; i < _num_strains; i++) {
-      _strains[i] = (unsigned char)0x00;
+    if (index < 0 || index > _num_strains) {
+        throw std::out_of_range("cannot set genotype at the index");
     }
-  }
-  if (info[0] == '.') {
-    _strains[index] = 0x00;
-  }
-  int col = 0;
-  const char* ptr = info;
-  unsigned char genotype = 0x00;
-  for (;;) {
-    char c = *ptr;
-    if (c == '\0') {
-      break;
-    } else if (c == ':') {
-      break;
-    } else if (c == '/') {
-      col = 1;
-      //if (++col >= 2) break;
-    } else if (c >= '0' && c <= '9') {
-      int an = atoi(ptr);
-      unsigned char allele;
-      if (an < 0) {
-	allele = (unsigned char)0;
-      } else if (an >= 15) {
-	allele = (unsigned char)15;
-      } else {
-	allele = an + 1;
-      }
-      //cout << col << " ;; " << ptr << " => " << (int)allele << endl;
-      if (col == 0) {
-	genotype = allele << 4;
-	col = -1;
-      } else if (col == 1) {
-	genotype |= allele;
-	col = -1;
-      }
+    if (_strains == NULL) {
+        _strains = new unsigned char[_num_strains];
+        for (int i = 0; i < _num_strains; i++) {
+            _strains[i] = (unsigned char)0x00;
+        }
     }
-    ptr++;
-  }
-  //cout << info << "\t" << hex << (int)genotype << dec << endl;
+    if (info[0] == '.') {
+        _strains[index] = 0x00;
+    }
+    int col = 0;
+    const char* ptr = info;
+    unsigned char genotype = 0x00;
+    for (;;) {
+        char c = *ptr;
+        if (c == '\0') {
+            break;
+        } else if (c == ':') {
+            break;
+        } else if (c == '/') {
+            col = 1;
+            //if (++col >= 2) break;
+        } else if (c >= '0' && c <= '9') {
+            int an = atoi(ptr);
+            unsigned char allele;
+            if (an < 0) {
+                allele = (unsigned char)0;
+            } else if (an >= 15) {
+                allele = (unsigned char)15;
+            } else {
+                allele = an + 1;
+            }
+            //cout << col << " ;; " << ptr << " => " << (int)allele << endl;
+            if (col == 0) {
+                genotype = allele << 4;
+                col = -1;
+            } else if (col == 1) {
+                genotype |= allele;
+                col = -1;
+            }
+        }
+        ptr++;
+    }
+    //cout << info << "\t" << hex << (int)genotype << dec << endl;
   
-  _strains[index] = genotype;
+    _strains[index] = genotype;
 }
 
 string dbsnp_locus::to_string() const {
@@ -454,23 +458,9 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
         return;
     }
 
-    // if (index == (int)_indicators.size() || _indicators[index]->chromosome != chromosome) {
-    //     _cache_range_end = std::numeric_limits<int>::max();
-    //     //cout << "out of range " << _cache_range_end << endl;
-    // // } else {
-    // //     cout << index << " / " << _indicators.size() << endl;
-    // //     cout << _indicators[index]->chromosome << " / " << chromosome << endl;
-    // }
-
-    // for (int i = 0; i < (int)_cache.size(); i++) {
-    //     delete _cache[i];
-    // }
-    // _cache.erase(_cache.begin(), _cache.end());
     ifstream fi(_filename.c_str());
-    //if (right_limit = 
     fi.seekg(left_limit);
     int col_strain = 9;
-    //cout << center << ":" << left_limit << ", " << right_limit << " => " << _cache_range_start << "-" << _cache_range_end << "       " << endl;
     for (;;) {
         string line;
         getline(fi, line);
@@ -484,13 +474,14 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
                 snp->set_genotype(i, items[i + col_strain].c_str());
             }
             _cache.push_back(snp);
-            //cout << snp->to_string(chromosome) << "\n";
         }
         if (fi.eof() || (right_limit > 0 && fi.tellg() >= (long long)right_limit)) break;
     }
     fi.close();
 }
 
+// get snps in the given range
+// if snps out of range were selected, snps will be loaded via load_snps method
 vector<dbsnp_locus const*> dbsnp_file::get_snps(string chromosome, int start, int end) const throw (exception) {
     string cname;
     if (chromosome.find("chr") == 0) {
@@ -499,9 +490,7 @@ vector<dbsnp_locus const*> dbsnp_file::get_snps(string chromosome, int start, in
         cname = chromosome;
     }
     vector<dbsnp_locus const*> snps;
-    //cerr << "current cache size " << _cache.size() << endl;
     const_cast<dbsnp_file*>(this)->load_snps(cname, start, end);
-    //cerr << "current cache size " << _cache.size() << endl;
     for (int i = 0; i < (int)(_cache.size()); i++) {
         dbsnp_locus const* cp = _cache[i];
         if (start <= (int)cp->_position && (int)cp->_position <= end) {
@@ -511,6 +500,7 @@ vector<dbsnp_locus const*> dbsnp_file::get_snps(string chromosome, int start, in
     return snps;
 }
 
+//
 dbsnp_file* dbsnp_file::load_dbsnp(const char* filename, bool force_uncached) throw (exception) {
     string cache = get_cache_filename(filename);
     if (!force_uncached) {
@@ -528,10 +518,7 @@ dbsnp_file* dbsnp_file::load_dbsnp(const char* filename, bool force_uncached) th
     size_t next_position = 0;
     size_t interval = CACHE_LINE_INTERVAL;
     string prev_chrom = "";
-//#define DEBUG
-//#ifdef DEBUG
     size_t num_lines = 0;
-//#endif
     while (!fi.eof()) {
         string line;
         size_t fpos = fi.tellg();
@@ -552,16 +539,10 @@ dbsnp_file* dbsnp_file::load_dbsnp(const char* filename, bool force_uncached) th
             }
         } else {
             vector<string> items = split_items(line, '\t');
-//            cout << items.size() << ", " << snpfile->strain_number() + 9 << endl;
-            if ((int)items.size() >= snpfile->strain_number() + 9) {
-//#ifdef DEBUG
+            if ((int)items.size() >= snpfile->strain_size() + 9) {
                 if (++num_lines % 1000 == 0) {
                     cerr << " " << (num_lines / 1000) << " " << items[0] << ":" << items[1] << "        \r";
-                    // if (num_lines > 1000000) {
-                    //     break;
-                    // }
                 }
-//#endif
                         
                 string chrom = items[0];
                 if (chrom != prev_chrom) {
@@ -570,16 +551,12 @@ dbsnp_file* dbsnp_file::load_dbsnp(const char* filename, bool force_uncached) th
                 }
                 size_t position = std::atoi(items[1].c_str());
                 if (position >= next_position) {
-//                    cout << snpfile->_indicators.size() << " add probe at " << fpos << " of " << position << " / " << next_position << "    \r";
-                    snpfile->add_cache(chrom, position, fpos);//new cache_position(chrom, position, fpos));
+                    snpfile->add_cache(chrom, position, fpos);
                     next_position += interval;
                 }
-//            } else {
-//                cout << "too few columns " << items.size() << " / " << snpfile->strain_number() << "     " << endl;
             }
         }
     }
-    //cout << "save cache\n";
     snpfile->save_cache(cache.c_str());
     return snpfile;
 }
@@ -588,4 +565,168 @@ void dbsnp_file::add_cache(const string& chromosome, size_t pos, size_t fpos) {
     _indicators.push_back(new cache_position(chromosome, pos, fpos));
 }
 
-    
+namespace {
+    unsigned char get_genotype_code(const string& genotype) {
+        if (genotype.size() < 3) {
+            return 0x00;
+        }
+        int left = (int)(genotype.c_str()[0] - '0') + 1;
+        int right = (int)(genotype.c_str()[2] - '0') + 1;
+        if (left > 0 && right > 0 && left <= 9 && right <= 9) {
+            return (unsigned char)(((left << 4) & 240) | (right & 15));
+        } else {
+            return 0x00;
+        }
+    }
+
+    void display_snp_distances(const dbsnp_file* dbsnp,//const vector<dbsnp_locus*>& snps,
+                               const string& chromosome, int start, int end,
+                               const map<int,unsigned char>& genotypes,
+                               ostream& ost) {
+        if (genotypes.size() == 0) {
+            return;
+        }
+        vector<dbsnp_locus const*> snps = dbsnp->get_snps(chromosome, start, end);
+        int num = dbsnp->strain_size();
+        int* matches = new int[num + 1];
+        int* unmatches = new int[num + 1];
+        int* half = new int[num + 1];
+        bool flag_xy = chromosome.find("X") != string::npos && chromosome.find("Y") != string::npos;
+        for (int i = 0; i <= num; i++) {
+            matches[i] = unmatches[i] = half[i] = 0;
+        }
+        for (int i = 0; i < (int)snps.size(); i++) {
+            dbsnp_locus const* snp = snps[i];
+            int pos = snp->position();
+            map<int,unsigned char>::const_iterator it = genotypes.find(pos);
+            if (it != genotypes.end()) {
+                unsigned char gt = it->second;
+                if (flag_xy && ((gt >> 4) != (gt & 15))) {
+                    continue;
+                }
+                if (gt == 0x11) {
+                    matches[0] ++;
+                } else if ((gt & 240) == 0x10 || (gt & 15) == 0x1) {
+                    half[0] ++;
+                } else {
+                    unmatches[0]++;
+                }
+
+                for (int j = 0; j < num; j++) {
+                    unsigned char gs;
+                    gs = snp->get_genotype(j);
+                    if (gs != 0) {
+                        if (gt == gs) {
+                            matches[j + 1]++;
+                        } else {
+                            unsigned char g1 = gt >> 4;
+                            unsigned char g2 = gt & 15;
+                            unsigned char g3 = gs >> 4;
+                            unsigned char g4 = gs & 15;
+                            if (g1 == g3 || g1 == g4 || g2 == g3 || g2 == g4) {
+                                half[j + 1]++;
+                            } else {
+                                unmatches[j + 1]++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        ost << chromosome << "\t" << start << "\t" << end << "\t" << snps.size();
+        ost << std::setprecision(4);
+        for (int i = 0; i <= num; i++) {
+            int s0 = matches[i];
+            int s1 = unmatches[i];
+            int s2 = half[i];
+            int total = s0 + s1 + s2;
+            double score;
+            if (total == 0) {
+                score = 0;
+            } else {
+                score = (double)(s1 + s2 * 0.5) * 100.0 / total;
+            }
+            ost << "\t" << score;
+        }
+        ost << "\n" << std::flush;
+        delete[] matches;
+        delete[] unmatches;
+        delete[] half;
+    }
+}
+
+void snp_distance::main(int argc, char** argv) throw (exception) {
+    int window_size = get_argument_integer(argc, argv, "w", 1000000);
+    int step = get_argument_integer(argc, argv, "s", window_size);
+    const char* filename_input = get_argument_string(argc, argv, "i", NULL);
+    const char* filename_output = get_argument_string(argc, argv, "o", NULL);
+    const char* filename_snps = get_argument_string(argc, argv, "V", NULL);
+    bool verbose = has_option(argc, argv, "verbose");
+    ostream* ost = &cout;
+
+    if (verbose) {
+        cerr << "Input file         : " << filename_input << endl;
+        cerr << "Output             : " << (filename_output == NULL ? "stdout" : filename_output) << endl;
+        cerr << "Snps               : " << filename_snps << endl;
+        cerr << "Window size        : " << window_size << endl;
+        cerr << "Step               : " << step << endl;
+    }
+
+
+    ifstream fi(filename_input);
+    if (fi.is_open() == false) {
+        throw invalid_argument("cannot open input file");
+    }
+    if (filename_output != NULL) {
+        ofstream* fo = new ofstream(filename_output);
+        if (fo->is_open() == false) {
+            delete fo;
+            throw invalid_argument("cannot open output file");
+        }
+        ost = fo;
+    }
+  
+    dbsnp_file* dbsnp = dbsnp_file::load_dbsnp(filename_snps);
+  
+    map<int,unsigned char> genotypes;
+    int start = 0;
+    int interval = window_size;
+    string chromosome;
+
+    *ost << "#CHROM\tstart\tend\tsnps\tREF";
+    for (int i = 0; i < (int)dbsnp->strain_size(); i++) {
+        *ost << "\t" << dbsnp->get_strain(i);
+    }
+    *ost << "\n";
+    while (!fi.eof()) {
+        string line;
+        getline(fi, line);
+        //cout << line << endl;
+        vector<string> items = split_items(line, '\t');
+        vector<double> scores;
+        //if (items[0] == chromosome && items.size() > 5) {
+        if (items.size() > 5 && line.c_str()[0] != '#') {
+            int pos = atoi(items[1].c_str());
+            if (pos >= start + window_size) {
+                display_snp_distances(dbsnp, items[0], start, start + window_size, genotypes, *ost);
+                genotypes.erase(genotypes.begin(), genotypes.end());
+                start = (pos / interval) * interval; 
+            } else {
+                //const string& genotype = items[4];
+                unsigned char gcode = get_genotype_code(items[4]);
+                if (gcode > 0) {
+                    //cout << pos << " " << (int)gcode << endl;
+                    genotypes[pos] = gcode;
+                }
+                //start += interval;
+            }
+            if (chromosome != items[0]) {
+                chromosome = items[0];
+                start = 0;
+            }
+        }
+    }
+    display_snp_distances(dbsnp, chromosome, start, start + window_size, genotypes, *ost);
+
+    delete dbsnp;
+}

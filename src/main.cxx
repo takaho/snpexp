@@ -118,6 +118,16 @@ int main(int argc, char** argv) {
             mode = 2;
         }
 
+	if (mode == 2) {
+            try {
+                snp_distance::main(argc, argv);
+                return 0;
+            } catch (exception& e) {
+                cerr << "error while mode 2\n";
+                throw;
+            }
+	}
+
         for (int i = 2; i < argc; i++) {
             if (argv[i][0] != '-' && tktools::io::file_exists(argv[i]) && strcmp(argv[i] + strlen(argv[i]) - 4, ".bam") == 0) {
                 //cout << argv[i] << endl;

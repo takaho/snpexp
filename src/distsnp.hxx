@@ -44,21 +44,22 @@ namespace tkbio {
     };
 
     class dbsnp_locus {
-      size_t _position;
-      string _reference;
-      string _alternative;
-      int _num_strains;
-      string _rsid;
-      unsigned char* _strains;
+        size_t _position;
+        string _reference;
+        string _alternative;
+        int _num_strains;
+        string _rsid;
+        unsigned char* _strains;
     private:
-      dbsnp_locus();
-      const dbsnp_locus& operator = (const dbsnp_locus& rhs);
-      dbsnp_locus(const dbsnp_locus& rhs);
+        dbsnp_locus();
+        const dbsnp_locus& operator = (const dbsnp_locus& rhs);
+        dbsnp_locus(const dbsnp_locus& rhs);
     public:
-      dbsnp_locus(size_t position, const string& reference, const string& alternative);
-      dbsnp_locus(size_t position, const string& rsid, const string& reference, const string& alternative, int num_strains=0);
+        dbsnp_locus(size_t position, const string& reference, const string& alternative);
+        dbsnp_locus(size_t position, const string& rsid, const string& reference, const string& alternative, int num_strains=0);
         ~dbsnp_locus();
         void set_genotype(int strain_index, char const* info);
+        unsigned char get_genotype(int strain_index) const;
         friend class dbsnp_file;
         const string& reference() const { return _reference; }
         const string& alternative() const { return _alternative; }
@@ -89,7 +90,7 @@ namespace tkbio {
     public:
         dbsnp_file(const char* filename, const vector<string>& strains);
         ~dbsnp_file();
-        int strain_number() const { return _strains.size(); }
+        int strain_size() const { return _strains.size(); }
         const string& get_strain(int index) const { return _strains[index]; }
         const string& cached_chromosome() const { return _cache_chromosome; }
         std::pair<int,int> cached_range() const { return std::make_pair(_cache_range_start, _cache_range_end); }
@@ -100,12 +101,10 @@ namespace tkbio {
         static dbsnp_file* load_dbsnp(const char* filename, bool force_uncached=false) throw (exception);
     };
 
-    // class snp_result {
-    //     string _chromosome;
-    //     int _length;
-    //     vector<string> _strains;
-    //     int ** _
-    // };
+  class snp_distance {
+  public:
+    static void main(int argc, char** argv) throw (exception);
+  };
 }
 
 #endif

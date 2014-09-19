@@ -6,4 +6,4 @@ trimvcf_SOURCES = trimvcf.hxx trimvcf.cxx gtf.hxx gtf.cxx tktools.hxx tktools.cx
 CXX = c++
 AM_CXXFLAGS = -O3 -pedantic -Wall -Wno-long-long -m64 -I/usr/local/include
 AM_LDFLAGS = -L/usr/local/lib
-LIBS = -lz -lbam
+LIBS = -lz -lbam -lpthread
