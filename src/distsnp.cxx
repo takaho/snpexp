@@ -723,9 +723,9 @@ void snp_distance::main(int argc, char** argv) throw (exception) {
                     chromosome = items[0];
                     start = (pos / interval) * interval;
                 } else {
-                    pos += interval;
+		  start += interval;
                     for (map<int,unsigned char>::iterator it = genotypes.begin(); it != genotypes.end(); it++) {
-                        if (it->first < pos) {
+		      if (it->first < start) {
                             genotypes.erase(it);
                         }
                     }
