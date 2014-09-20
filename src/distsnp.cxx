@@ -717,23 +717,18 @@ void snp_distance::main(int argc, char** argv) throw (exception) {
                     chromosome = items[0];
                     start = (pos / interval) * interval;
                 } else {
+                    pos += interval;
                     for (map<int,unsigned char>::iterator it = genotypes.begin(); it != genotypes.end(); it++) {
-                        if (it->first < pos + interval) {
+                        if (it->first < pos) {
                             genotypes.erase(it);
                         }
                     }
                 }
             } 
-            //const string& genotype = items[4];
             unsigned char gcode = get_genotype_code(items[4]);
             if (gcode > 0) {
-                //cout << pos << " " << (int)gcode << endl;
                 genotypes[pos] = gcode;
             }
-            // if (chromosome != items[0]) {
-            //     chromosome = items[0];
-            //     start = 0;
-            // }
         }
     }
     display_snp_distances(dbsnp, chromosome, start, start + window_size, genotypes, *ost);
