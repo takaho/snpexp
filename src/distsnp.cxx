@@ -650,8 +650,8 @@ namespace {
             } else {
                 score = (double)(s1 + s2 * 0.5) * 100.0 / total;
             }
-            ost << ";" << s0 << "/" << s2 << "/" << s1 << "/" << s3;
             ost << "\t" << score;
+            ost << ";" << s0 << "/" << s2 << "/" << s1 << "/" << s3;
         }
         ost << "\n" << std::flush;
         delete[] matches;
