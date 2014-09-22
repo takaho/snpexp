@@ -641,13 +641,13 @@ string chromosome_seq::get_cache_filename(const char* filename) {
 const unsigned int chromosome_seq::MAGIC_NUMBER = 0xcac17e88;
 void chromosome_seq::save_cache(const char* filename, const vector<chromosome_seq*>& chromosomes) throw (exception) {
     ofstream fo(filename);
-    cerr << "saving to " << filename << endl;
+    //cerr << "saving to " << filename << endl;
     if (fo.is_open() == false) {
-        throw invalid_argument("cannot open " + string(filename));
+        throw invalid_argument("cannot open chromosome cache to save : " + string(filename));
     }
     fo.write(reinterpret_cast<const char*>(&MAGIC_NUMBER), sizeof(unsigned int));
     int num = chromosomes.size();
-    cerr << num << " chromosomes\n";
+    //cerr << num << " chromosomes\n";
     fo.write(reinterpret_cast<char*>(&num), sizeof(int));
     for (int i = 0; i < num; i++) {
         const chromosome_seq* seq = chromosomes[i];
@@ -673,7 +673,7 @@ vector<chromosome_seq*> chromosome_seq::load_from_cache(const char* filename) th
     vector<chromosome_seq*> seqs;
     ifstream fi(filename);
     if (fi.is_open() == false) {
-        throw invalid_argument("cannot open " + string(filename));
+        throw invalid_argument("cannot open genome cache :" + string(filename));
     }
     unsigned int magic;
     fi.read(reinterpret_cast<char*>(&magic), sizeof(unsigned int));
@@ -714,7 +714,7 @@ vector<chromosome_seq*> chromosome_seq::load_from_cache(const char* filename) th
 void chromosome_seq::load_sequence_from_cache() throw (exception) {
     ifstream fi(_filename.c_str());
     if (fi.is_open() == false) {
-        throw invalid_argument("cannot open " + _filename);
+        throw invalid_argument("cannot open genome sequence: " + _filename);
     }
     fi.seekg(_data_start);
     size_t bufsize = _data_end - _data_start;
@@ -758,6 +758,7 @@ vector<chromosome_seq*> chromosome_seq::load_genome(const char* filename) throw 
         getline(fi, line);
         if (line.c_str()[0] == '>') {
             if (seq != NULL) {
+                seq->_filename = filename;
                 seq->_length = length;
                 seq->_sequence = NULL;
                 //seq->set_sequence(length, buffer);
