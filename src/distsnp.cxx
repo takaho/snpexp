@@ -591,9 +591,10 @@ namespace {
         int* matches = new int[num + 1];
         int* unmatches = new int[num + 1];
         int* half = new int[num + 1];
+        int* others = new int[num + 1];
         bool flag_xy = chromosome.find("X") != string::npos && chromosome.find("Y") != string::npos;
         for (int i = 0; i <= num; i++) {
-            matches[i] = unmatches[i] = half[i] = 0;
+            matches[i] = unmatches[i] = half[i] = others[i] = 0;
         }
         for (int i = 0; i < (int)snps.size(); i++) {
             dbsnp_locus const* snp = snps[i];
@@ -616,7 +617,9 @@ namespace {
                     unsigned char gs;
                     gs = snp->get_genotype(j);
                     if (gs != 0) {
-                        if (gt == gs) {
+                        if (gs == 0x11) {
+                            others[j + 1] ++;
+                        } else if (gt == gs) {
                             matches[j + 1]++;
                         } else {
                             unsigned char g1 = gt >> 4;
@@ -639,6 +642,7 @@ namespace {
             int s0 = matches[i];
             int s1 = unmatches[i];
             int s2 = half[i];
+            int s3 = others[i];
             int total = s0 + s1 + s2;
             double score;
             if (total == 0) {
@@ -647,11 +651,13 @@ namespace {
                 score = (double)(s1 + s2 * 0.5) * 100.0 / total;
             }
             ost << "\t" << score;
+            ost << ";" << s0 << "/" << s2 << "/" << s1 << "/" << s3;
         }
         ost << "\n" << std::flush;
         delete[] matches;
         delete[] unmatches;
         delete[] half;
+        delete[] others;
     }
 }
 
@@ -709,7 +715,7 @@ void snp_distance::main(int argc, char** argv) throw (exception) {
             int pos = atoi(items[1].c_str());
             if (chromosome != items[0] || pos >= start + window_size) {
                 if (genotypes.size() > 0) {
-                    display_snp_distances(dbsnp, items[0], start, start + window_size, genotypes, *ost);
+                    display_snp_distances(dbsnp, chromosome, start, start + window_size, genotypes, *ost);
                 }
                 //map<int,unsigned char> saved;
                 if (chromosome != items[0]) {
@@ -725,8 +731,10 @@ void snp_distance::main(int argc, char** argv) throw (exception) {
                     }
                 }
             } 
+            //const string& genotype = items[4];
             unsigned char gcode = get_genotype_code(items[4]);
             if (gcode > 0) {
+                //cout << pos << " " << (int)gcode << endl;
                 genotypes[pos] = gcode;
             }
         }
