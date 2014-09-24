@@ -19,15 +19,6 @@ using std::make_pair;
 using tktools::split_items;
 using namespace tkbio;
 
-namespace {
-    // template<typename T> T min(T a, T b) {
-    //     return a < b ? a : b;
-    // }
-    // template<typename T> T max(T a, T b) {
-    //     return a > b ? a : b;
-    // }
-}
-
 fragment_processor::fragment_processor() {
     _variation_db = NULL;
     _quality_threshold = 10;
@@ -108,6 +99,11 @@ recombination_detector::recombination_detector(int coverage, float hetero_thresh
     _snp_stretches = 1;
     _gap_tolerance = 0;
     _allele_balance = 0.0;
+    _recombination_mode = DSBR;
+}
+
+void recombination_detector::set_detection_mode(Mode mode) {
+    _recombination_mode = mode;
 }
 
 bool recombination_detector::check_acceptable_recombination(int counts[4]) const {
@@ -124,12 +120,24 @@ bool recombination_detector::check_acceptable_recombination(int counts[4]) const
         return false;
     }
     int thr = (int)(total * _minimum_recombination_composition + 0.5);
+    int num_zeros = 0;
+    int num_detected = 0;
     for (int i = 0; i < 4; i++) {
         if (counts[i] < thr) {
-            return false;
+            if (counts[i] == 0) {
+                num_zeros ++;
+            }
+        } else {
+            num_detected ++;
         }
     }
-    return true;
+    if (_recombination_mode == DSBR) {
+        return (num_detected == 3 && num_zeros == 1);
+    } else if (_recombination_mode == Meiotic) {
+        return num_detected == 4;
+    } else {
+        return (num_detected == 3 && num_zeros == 1) || (num_detected == 4);
+    }
 }
 
 void recombination_detector::set_allele_balance(double ratio) {
@@ -141,6 +149,14 @@ void recombination_detector::set_allele_balance(double ratio) {
         _allele_balance = ratio;
     }
 }
+
+void recombination_detector::set_haplotype_parameters(int stretches, int gaps) {
+    _snp_stretches = stretches;
+    if (gaps >= 0) {
+        _gap_tolerance = gaps;
+    }
+}
+
 
 void recombination_detector::process_fragments(const vector<recfragment*>& fragments,
                                                chromosome_seq const* chromosome,
@@ -156,17 +172,17 @@ void recombination_detector::process_fragments(const vector<recfragment*>& fragm
         vector<dbsnp_locus const*> snps = _variation_db->get_snps(chromosome->name(), start, end);
         for (int i = 0; i < (int)snps.size(); i++) {
             //pos.insert(snps[i]->position());
-	  int refid = hetero_locus::get_base_id(snps[i]->reference());
-	  int altid = hetero_locus::get_base_id(snps[i]->alternative());
+            int refid = hetero_locus::get_base_id(snps[i]->reference());
+            int altid = hetero_locus::get_base_id(snps[i]->alternative());
             if (refid >= 0 && altid >= 0) {//snps[i]->reference().size() == 1 && snps[i]->alternative().size() == 1) {
                 //int chromosome_code; // chromosome->name()
-	      hetero_locus* hl = new hetero_locus(chromosome->code(), snps[i]);
-	      if (hl->is_available()) {
-		loci.push_back(hl);
-	      } else {
-		delete hl;
-	      }
-	      //                loci.push_back(new hetero_locus(chromosome->code(), snps[i]->position(), refid, 0, altid, 0));//snps[i]->reference().c_str()[0], 0, snps[i]->alternative().c_str()[0], 0));
+                hetero_locus* hl = new hetero_locus(chromosome->code(), snps[i]);
+                if (hl->is_available()) {
+                    loci.push_back(hl);
+                } else {
+                    delete hl;
+                }
+                //                loci.push_back(new hetero_locus(chromosome->code(), snps[i]->position(), refid, 0, altid, 0));//snps[i]->reference().c_str()[0], 0, snps[i]->alternative().c_str()[0], 0));
             }
         }
         if (loci.size() < 2) {
@@ -187,118 +203,85 @@ void recombination_detector::process_fragments(const vector<recfragment*>& fragm
     }
 
     //int tolerance = 2;
-    int counts[4];
+    int haplo_counts[4];
+    int* genotype_cache = new int[fragments.size()];
+    int tail = (int)loci.size() - _snp_stretches * 2;
+    for (int site_start = 0; site_start < tail; site_start++) {
+        int gap_limit = std::min(_gap_tolerance, (int)loci.size() - site_start - _snp_stretches * 2);
+        for (int gap = 0; gap <= gap_limit; gap++) {
+            // clear counts
+            for (int i = 0; i < 4; i++) haplo_counts[i] = 0;
 
-
-    for (int i = _snp_stretches; i < (int)loci.size() - _snp_stretches; i++) {
-        for (int j = 0; j < 4; j++) counts[j] = 0;
-        int head = i - _snp_stretches - _gap_tolerance;
-        if (head < 0) {
-            head = 0;
-        }
-        int tail = i + _snp_stretches + _gap_tolerance;
-        if (tail > (int)loci.size()) {
-            tail = (int)loci.size();
-        }
-        for (int j = 0; j < (int)fragments.size(); j++) {
-            int const* pattern = patterns[j];
-            int backward = 0;
-            int forward = 0;
-            int span_forward = 0;
-            int span_backward = 0;
-            // for (int k = i - _snp_stretches; k < i + _snp_stretches; k++) {
-            //     if (pattern[k] == 1) {
-            //         cout << "A";
-            //     } else if (pattern[k] == -1) {
-            //         cout << "a";
-            //     } else {
-            //         cout << ".";
-            //     }
-            // }
-            // cout << "\t";
-            for (int k = i - 1; k >= head; k--) {
-                int p = pattern[k];
-                if (p != 0) {
-                    if (backward == 0) {
-                        backward = p;
-                    } else if (p + backward == 0) {//backward != p) {
-                        //if (backward != p) {
-                        backward = 0;
-                        break;
+            // set genotype [site_start:site_start + _snp_stretches] when gap is 0
+            if (gap == 0) {
+                for (int i = 0; i < (int)fragments.size(); i++) {
+                    int const* pattern = patterns[i];
+                    int genotype = pattern[site_start];
+                    if (genotype != 0) {
+                        for (int j = 1; j < _snp_stretches; j++) {
+                            int p = pattern[site_start + j];
+                            if (p != genotype) {
+                                genotype = 0;
+                                break;
+                            }
+                        }
                     }
-                    span_backward ++;
-                    if (span_backward >= _snp_stretches) {
-                        break;
-                    }
+                    genotype_cache[i] = genotype;
                 }
             }
-            for (int k = i; k < tail; k++) {
-                int p = pattern[k];
-                if (p != 0) {
-                    if (forward == 0) {
-                        forward = p;
-                    } else if (forward + p == 0) {
-                        forward = 0;
-                        break;
-                    }
-                    span_forward ++;
-                    if (span_forward >= _snp_stretches) {
-                        break;
+
+            // set forward genotype
+            int num_available = 0;
+            int forward_start = site_start + _snp_stretches + gap;
+
+            int steps = std::min(_snp_stretches, (int)loci.size() - forward_start);
+            for (int i = 0; i < (int)fragments.size(); i++) {
+                if ((int)fragments.size() - i + num_available < _minimum_recombination_reads) {
+                    break;
+                }
+                int genotype_backward = genotype_cache[i];
+                if (genotype_backward == 0) {
+                    continue;
+                }
+                int const* pattern = patterns[i];
+                int genotype = pattern[forward_start];
+                if (genotype != 0) {
+                    for (int j = 1; j < steps; j++) {
+                        if (genotype != pattern[forward_start + j]) {
+                            genotype = 0;
+                            break;
+                        }
                     }
                 }
+                // if genotype is determined, count up the haplotype
+                if (genotype != 0) {
+                    num_available++;
+                    int genotype_forward = genotype;
+                    haplo_counts[(genotype_backward > 0 ? 2 : 0) | (genotype_forward > 0 ? 1 : 0)]++;
+                }
             }
-            //cout << i << ":" << j << "\t" << backward << "/" << forward << endl;
-            if (forward != 0 && backward != 0) {
-                counts[(forward == 1 ? 1 : 0) | (backward == 1 ? 2 : 0)] ++;
+            if (check_acceptable_recombination(haplo_counts)) {
+                hetero_locus const* snp_5 = loci[site_start];// + _snp_stretches - 1];
+                hetero_locus const* snp_3 = loci[forward_start + _snp_stretches - 1];
+                ost << chromosome->name() << ":" << snp_5->position() << "-" << snp_3->position() << "\t" << snp_5->id() << "-" << snp_3->id();
+                for (int j = 0; j < 4; j++) {
+                    ost << "\t";
+                    for (int k = 0; k < _snp_stretches; k++) {
+                        hetero_locus const* locus = loci[site_start + k];
+                        ost << (((j & 2) != 0) ? locus->ref() : locus->alt());
+                    }
+                    for (int k = 0; k < _snp_stretches; k++) {
+                        hetero_locus const* locus = loci[forward_start + k];
+                        ost << (((j & 1) != 0) ? locus->ref() : locus->alt());
+                    }
+                    ost << ";" << haplo_counts[j];
+                }
+                ost << "\n";
+                site_start += _snp_stretches + gap;
+                break;
             }
         }
-        if (check_acceptable_recombination(counts)) {
-	  hetero_locus const* snp_5 = loci[std::max(0, i - _snp_stretches)];
-	  hetero_locus const* snp_3 = loci[std::min((int)loci.size() - 1, i + _snp_stretches - 1)];
-	  
-	  ost << chromosome->name() << ":" << snp_5->position() << "-" << snp_3->position() << "\t" << snp_5->id() << "-" << snp_3->id();
-// << "\t" << loci[i]->ref() << ";" << loci[i]->alt() << "\t" << loci[i+l]->ref() << ";" << loci[i+l]->alt() << "\t";
-            for (int j = 0; j < 4; j++) {
-                ost << "\t";
-                for (int k = i - _snp_stretches; k < i + _snp_stretches; k++) {
-                    hetero_locus const* locus = loci[k];//- _snp_stretches + k];
-		    if (k < i) {
-		      ost << ((j & 2) == 0 ? locus->alt() : locus->ref());
-		    } else {
-		      ost << ((j & 1) == 0 ? locus->alt() : locus->ref());
-		    }
-		}
-// 		      if ((j & 1) == 0) 
-//                     if (j == 0) {
-//                         ost << locus->ref();
-//                     } else if (j == 3) {
-//                         ost << locus->alt();
-// 		    } else if (j == 1) {
-// 		      if ( k < i) {
-// 			ost << locus->
-//                     } else {
-//                         if (k < i) {
-//                             ost << locus->ref();
-//                         } else {
-//                             ost << locus->alt();
-//                         }
-//                     }
-//                 }
-                ost << ";" << counts[j];
-                //ost << loci[i - _snp_stretches + k - 1]
-                //ost << "\t" << counts[j];
-            }
-            ost << "\n";
-        }
     }
-
-    for (int i = 0; i < (int)loci.size(); i++) {
-        delete loci[i];
-    }
-    for (int i = 0; i < (int)fragments.size(); i++) {
-        delete[] patterns[i];
-    }
-    delete[] patterns;
 }
 
 
@@ -375,14 +358,7 @@ string snp_enumerator::get_genotype_symbol(dbsnp_locus const* snp, int counts[5]
 	}
         stringstream ss;
         int threshold = (int)(_minimum_minor_ratio * total_alleles + 0.5);
-        //bool flag = false;
 	int num_alleles = 0;
-
-// 	cout << endl;
-//         for (int i = 0; i < (int)nums.size(); i++) {
-// 	  cout << i << ":" << nums[i].first << ", " << nums[i].second << endl;
-// 	}
-// 	cout << endl;
 
         for (int i = 0; i < (int)nums.size(); i++) {
             int max_index = -1;

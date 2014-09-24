@@ -70,6 +70,7 @@ namespace {
         cerr << "COMMANDS\n";
         cerr << " rec/recombination   : detect recombination junctions\n";
         cerr << " count               : enumerate nucleotide frequency of SNP sites\n";
+        cerr << " dist                : read <count> command output and estimate difference from strains\n";
         cerr << "OPTIONS\n";
         cerr << " -c <number>  : minimum coverage for analysis (10)`n";
         cerr << " -w <number>  : window size to analysis chunk, set more than double of fragment size (3000)\n";
@@ -79,6 +80,13 @@ namespace {
         cerr << " -q <number>   : threshold of mapping quality (10)\n";
         cerr << " -D <number>   : display verbosity (0:all, 1:countable, 2:hetero)\n";
         cerr << " --pared       : paired\n";
+
+        cerr << "OPTIONS for recombination\n";
+        cerr << " -l <number>   : the number of SNPs to define haplotypes (default 2)\n";
+        cerr << " -G <number>   : maximum gaps between snps for haplotype detection (default 0)\n";
+        cerr << " -b <number>   : allele balance parameter (default 0.5)\n";
+        cerr << "OPTIONS for dist command\n";
+        cerr << " -i <filename> : the output filename of count command\n";
     }
 }
 
@@ -102,6 +110,8 @@ int main(int argc, char** argv) {
         vector<string> filenames;
         double allele_balance = get_argument_float(argc, argv, "b", 0.5);
         bool exit_on_y = has_option(argc, argv, "Y");
+        int gap_tolerance = get_argument_integer(argc, argv, "G", 0);
+        int snp_stretch = get_argument_integer(argc, argv, "l", 2);
 
         int mode = 0;
         fragment_processor* processor = NULL;
@@ -167,6 +177,7 @@ int main(int argc, char** argv) {
         if (mode == 0) {
             recombination_detector* p = new recombination_detector(coverage, heterozygosity);
             p->set_allele_balance(allele_balance);
+            p->set_haplotype_parameters(snp_stretch, gap_tolerance);
             //processor = new recombination_detector(coverage, heterozygosity);
             processor = p;
             processor->set_display_mode(display_mode);
@@ -350,9 +361,9 @@ second
                             if (current_bamchrm != r->core.tid) { // next chromosome
                                 status[i] = 0x02 | 0x04;
                                 num_chr_finish ++;
-                                if (verbose) {
-                                    cerr << "change chromosome       \n";
-                                }
+                                // if (verbose) {
+                                //     cerr << "change chromosome       \n";
+                                // }
                                 break;
                             } else if (r->core.pos > retain_end) { // next window
                                 status[i] = 0x01 | 0x04;
@@ -420,7 +431,7 @@ second
                     break;
                 }
                 if (verbose) {
-                    cerr << "change chromosome  " << headers[0]->target_name[next_chr] << "    " << endl;
+                    cerr << "change chrom " << headers[0]->target_name[next_chr] << "     " << endl;
                 }
                 current_bamchrm = next_chr;
                 

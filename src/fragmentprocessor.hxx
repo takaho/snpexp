@@ -45,6 +45,7 @@ namespace tkbio {
     };
     
     class recombination_detector : public fragment_processor {
+        typedef enum Mode {DSBR=1, Meiotic=2, BOTH=3} Mode;
         int _coverage;
         float _minimum_minor_ratio;
         int _minimum_recombination_reads;
@@ -52,14 +53,20 @@ namespace tkbio {
         int _snp_stretches; // how many snps are required to define genotype (1)
         int _gap_tolerance; // how many
         double _allele_balance;
+        Mode _recombination_mode; // 3:all 1:double-strand break 2:meitotic recombination
     public:
         recombination_detector(int coverage=25, float hetero_threshold=0.25f,
                                float recomb_threshold=0.05f);
 
         void set_allele_balance(double ratio);
+        Mode get_detection_mode() const { return _recombination_mode; }
+        void set_detection_mode(Mode mode);
         double allele_balance() const { return _allele_balance; }
         int coverage_threshold() const { return _coverage; }
         float heterozygosity_threshold() const { return _minimum_minor_ratio; }
+        void set_haplotype_parameters(int stretches, int gaps=-1);
+        int get_haplotype_streches() const { return _snp_stretches; }
+        int get_gap_tolerance() const { return _gap_tolerance; }
         virtual void process_fragments(const vector<recfragment*>& fragments,
                                        chromosome_seq const* chromosome,
                                        int start, int end, ostream& ost) throw (exception);
