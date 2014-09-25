@@ -161,50 +161,41 @@ void recombination_detector::set_haplotype_parameters(int stretches, int gaps) {
 void recombination_detector::process_fragments(const vector<recfragment*>& fragments,
                                                chromosome_seq const* chromosome,
                                                int start, int end, ostream& ost) throw (exception) {
-    // if (chromosome == NULL) {
-    //     std::cout << chromosome->name() << ";" << chromosome->length() << "\t" << start << "\t" << end << "\t" << fragments.size() << std::endl;
-    //     return;
-    // }
-    //cout << chromosome->name() << ":" << start << "-" << end << endl;
+
+    // detect heterozygous loci
     vector<hetero_locus*> loci;
     if (_variation_db != NULL) {
         set<int> pos;
         vector<dbsnp_locus const*> snps = _variation_db->get_snps(chromosome->name(), start, end);
         for (int i = 0; i < (int)snps.size(); i++) {
-            //pos.insert(snps[i]->position());
             int refid = hetero_locus::get_base_id(snps[i]->reference());
             int altid = hetero_locus::get_base_id(snps[i]->alternative());
             if (refid >= 0 && altid >= 0) {//snps[i]->reference().size() == 1 && snps[i]->alternative().size() == 1) {
-                //int chromosome_code; // chromosome->name()
                 hetero_locus* hl = new hetero_locus(chromosome->code(), snps[i]);
                 if (hl->is_available()) {
                     loci.push_back(hl);
                 } else {
                     delete hl;
                 }
-                //                loci.push_back(new hetero_locus(chromosome->code(), snps[i]->position(), refid, 0, altid, 0));//snps[i]->reference().c_str()[0], 0, snps[i]->alternative().c_str()[0], 0));
             }
         }
         if (loci.size() < 2) {
             return;
         }
-        // cout << chromosome->name() << " " << start << "-" << end << " ";
-        // cout << pos.size() << "SNPs\n";
-    // } else {
-    //     cout << "vcf null\n";
-                //loci = scan_heterozygous_loci(fragments, chromosome, start, end, pos);
     } else {
+        // de novo detection of SNPs
         loci = scan_heterozygous_loci(fragments, chromosome, start, end);
     }
+
+    // get genotypes as integer arrays
     int** patterns = new int*[fragments.size()];
     for (int i = 0; i < (int)fragments.size(); i++) {
         patterns[i] = new int[loci.size()];
         fragments[i]->generate_recombination_pattern(loci, patterns[i]);
     }
-
-    //int tolerance = 2;
-    int haplo_counts[4];
     int* genotype_cache = new int[fragments.size()];
+
+    int haplo_counts[4];
     int tail = (int)loci.size() - _snp_stretches * 2;
     for (int site_start = 0; site_start < tail; site_start++) {
         int gap_limit = std::min(_gap_tolerance, (int)loci.size() - site_start - _snp_stretches * 2);
@@ -212,8 +203,7 @@ void recombination_detector::process_fragments(const vector<recfragment*>& fragm
             // clear counts
             for (int i = 0; i < 4; i++) haplo_counts[i] = 0;
 
-            // set genotype [site_start:site_start + _snp_stretches] when gap is 0
-            if (gap == 0) {
+            if (gap == 0) { // set backward haplotypes
                 for (int i = 0; i < (int)fragments.size(); i++) {
                     int const* pattern = patterns[i];
                     int genotype = pattern[site_start];
@@ -230,7 +220,7 @@ void recombination_detector::process_fragments(const vector<recfragment*>& fragm
                 }
             }
 
-            // set forward genotype
+            // set forward haplotypes
             int num_available = 0;
             int forward_start = site_start + _snp_stretches + gap;
 
@@ -260,6 +250,8 @@ void recombination_detector::process_fragments(const vector<recfragment*>& fragm
                     haplo_counts[(genotype_backward > 0 ? 2 : 0) | (genotype_forward > 0 ? 1 : 0)]++;
                 }
             }
+
+            // output results if recombination is detected
             if (check_acceptable_recombination(haplo_counts)) {
                 hetero_locus const* snp_5 = loci[site_start];// + _snp_stretches - 1];
                 hetero_locus const* snp_3 = loci[forward_start + _snp_stretches - 1];
@@ -282,6 +274,13 @@ void recombination_detector::process_fragments(const vector<recfragment*>& fragm
             }
         }
     }
+
+    // clean up
+    delete[] genotype_cache;
+    for (int i = 0; i < (int)fragments.size(); i++) {
+        delete[] patterns[i];
+    }
+    delete[] patterns;
 }
 
 

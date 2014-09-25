@@ -284,7 +284,7 @@ void recfragment::generate_recombination_pattern(const vector<hetero_locus*>& lo
     int index = 0;
     for (int i = 0; i < (int)loci.size(); i++) {
         int pos = loci[i]->position();
-        char ref = loci[i]->ref();//second;
+        char ref = loci[i]->ref();
         char alt = loci[i]->alt();
         int value = 0;
         while (index < (int)_mapped.size()) {
