@@ -58,7 +58,8 @@ recfragment::recfragment(int chromosome, bam1_t* seq, int num, const set<int>& a
 // }
 
 namespace {
-    char _bamnucleotide[17] = "\?AC\?G\?\?\?T\?\?\?\?\?-N";
+    //char _bamnucleotide[17] = "\?AC\?G\?\?\?T\?\?\?\?\?-N";
+    char _bamnucleotide[17] = ".AC.G...T.....-N";
     unsigned char base2code(char n) {
         if (n == 'A') {
             return 0x1;
@@ -186,7 +187,7 @@ char recfragment::get_base(int pos, unsigned char qual_threshold, int& count) co
     int size = _mapped.size();
     int right = size;
     if (pos < _position5 || pos >= _position3 || size == 0) {
-      return '\0';
+        return '\0';
     }
     for (;;) {
         int center = (left + right) / 2;
@@ -522,11 +523,11 @@ unsigned char chromosome_seq::get_base_code(int pos) const {
         const_cast<chromosome_seq*>(this)->load_sequence_from_cache();
     }
     if (pos < 1 || pos > _length) {
-        return -1;
+        return (unsigned char)0;//-1;
     } else {
         pos--;
     }
-    unsigned char code = _sequence[pos >> 1] >> ((pos & 1) == 0 ? 4 : 0) & 0x0f;
+    unsigned char code = (_sequence[pos >> 1] >> ((pos & 1) == 0 ? 4 : 0)) & 0x0f;
     return code;
 }
 
@@ -724,12 +725,27 @@ void chromosome_seq::load_sequence_from_cache() throw (exception) {
     _sequence = new unsigned char[bufsize / 2 + 1];
     _sequence[bufsize / 2] = (unsigned char)0;
     unsigned char* ptr = _sequence;
-    for (size_t i = 0; i < bufsize; i+= 2) {
-        char c1 = buffer[i];
-        char c2 = buffer[i+1];
-        *ptr = (base2code(c1) << 4) || base2code(c2);
-        ptr++;
+    int pos = 0;
+    for (size_t i = 0; i < bufsize; i++) {
+        char base = buffer[i];
+        if (base >= 'A' && base <= 'Z') {
+            if ((pos & 1) != 0) {
+                *ptr |= base2code(base);
+                ptr++;
+            } else {
+                *ptr = base2code(base) << 4;
+            }
+            pos++;
+            //if ((pos & 1) == 1)
+        }
     }
+
+    // for (size_t i = 0; i < bufsize; i+= 2) {
+    //     char c1 = buffer[i];
+    //     char c2 = buffer[i+1];
+    //     *ptr = (base2code(c1) << 4) || base2code(c2);
+    //     ptr++;
+    // }
     fi.close();
     delete[] buffer;
 }
@@ -890,14 +906,15 @@ void recfragment::bundle_pairs(vector<recfragment*>& fragments) throw (runtime_e
             recfragment* q = fragments[j];
             if (q == NULL) continue;
             if (p->_group != q->_group) {
-                if (p->_group == q->_group && p->name() == q->name()) {
-                    //cout << "JOIN:" << p->to_string() << " + " << q->to_string();
-                    p->join_sequence(q);
-                    //cout << " => " << p->to_string() << endl;
-                    delete q;
-                    fragments[j] = NULL;
-                    break;
-                }
+                break;
+            }
+            if (p->name() == q->name()) {
+                cout << "JOIN:" << p->to_string() << " + " << q->to_string();
+                p->join_sequence(q);
+                cout << " => " << p->to_string() << endl;
+                delete q;
+                fragments[j] = NULL;
+                break;
             }
         }
     }
@@ -916,7 +933,7 @@ void recfragment::bundle_pairs(vector<recfragment*>& fragments) throw (runtime_e
 
 string recfragment::to_string() const {
     stringstream ss;
-    ss << _group << ":" << chromosome() << ":" << position5() << "-" << position3();
+    ss << _group << ":" << _name << " : " << chromosome() << ":" << position5() << "-" << position3();
     return ss.str();
 }
 

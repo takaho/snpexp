@@ -25,23 +25,29 @@ namespace tkbio {
     class dbsnp_file;
     class hetero_locus;
     class dbsnp_locus;
+    class gtffile;
 
     class fragment_processor {
     protected:
         dbsnp_file const* _variation_db;
         unsigned char _quality_threshold;
         int _display_mode; // 0: all, 1: covered, 2:non-standard, 3: hetero
+        gtffile const* _gtffile;
     public:
         fragment_processor();
         virtual ~fragment_processor();
         virtual void process_fragments(const vector<recfragment*>& fragments,
                                        chromosome_seq const* chromosome,
                                        int start, int end, ostream& ost) throw (exception) = 0;
+        virtual void set_gtf(gtffile const* gtf) throw (exception) { _gtffile = gtf; }
+        gtffile const* get_gtf() const { return _gtffile; }
         void set_vcf(dbsnp_file const* vardb) { _variation_db = vardb; }
+        dbsnp_file const* get_vcf() const { return _variation_db; }
         void set_quality_threshold(unsigned char thr) {
             _quality_threshold = thr;
         }
         virtual void set_display_mode(int mode) throw (std::invalid_argument);
+        //static void remove_outside_exons(vector<recfragmentgtffile const* gtf, chromosome_seq count* chromosome, int start, int end) throw (exception);
     };
     
     class recombination_detector : public fragment_processor {
@@ -58,6 +64,7 @@ namespace tkbio {
         recombination_detector(int coverage=25, float hetero_threshold=0.25f,
                                float recomb_threshold=0.05f);
 
+        virtual void set_gtf(gtffile const* gtf) throw (exception);
         void set_allele_balance(double ratio);
         Mode get_detection_mode() const { return _recombination_mode; }
         void set_detection_mode(Mode mode);

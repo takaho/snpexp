@@ -2730,7 +2730,7 @@ fi
 
 # Define the identity of the package.
  PACKAGE=snpexp
- VERSION=0.3.9
+ VERSION=0.3.10
 
 
 cat >>confdefs.h <<_ACEOF

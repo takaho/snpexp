@@ -75,15 +75,16 @@ namespace {
         cerr << " -c <number>  : minimum coverage for analysis (10)`n";
         cerr << " -w <number>  : window size to analysis chunk, set more than double of fragment size (3000)\n";
         cerr << " -H <ratio>   : heterozygosity to determine SNPs gruop\n";
-        cerr << " -g <filename> : genome sequence\n";
+        cerr << " -s <filename> : genome sequence\n";
         cerr << " -o <filename> : output filename (stdout)\n";
         cerr << " -q <number>   : threshold of mapping quality (10)\n";
         cerr << " -D <number>   : display verbosity (0:all, 1:countable, 2:hetero)\n";
+        cerr << " -G <filename> : annotation file in GTF format\n";
         cerr << " --pared       : paired\n";
 
         cerr << "OPTIONS for recombination\n";
         cerr << " -l <number>   : the number of SNPs to define haplotypes (default 2)\n";
-        cerr << " -G <number>   : maximum gaps between snps for haplotype detection (default 0)\n";
+        cerr << " -g <number>   : maximum gaps between snps for haplotype detection (default 0)\n";
         cerr << " -b <number>   : allele balance parameter (default 0.5)\n";
         cerr << "OPTIONS for dist command\n";
         cerr << " -i <filename> : the output filename of count command\n";
@@ -100,9 +101,10 @@ int main(int argc, char** argv) {
         int window_size = get_argument_integer(argc, argv, "w", 3000);
         bool paired = has_option(argc, argv, "-paired");
         int window_margin = get_argument_integer(argc, argv, "m", 0);
-        const char* filename_genome = get_argument_string(argc, argv, "g", NULL);
+        const char* filename_genome = get_argument_string(argc, argv, "s", NULL);
         const char* filename_output = get_argument_string(argc, argv, "o", NULL);
         const char* filename_snps = get_argument_string(argc, argv, "V", NULL);
+        const char* filename_gtf = get_argument_string(argc, argv, "G", NULL);
         size_t max_fragments = get_argument_integer(argc, argv, "x", 10000);
         int mapping_quality = get_argument_integer(argc, argv, "q", 10);
 	int display_mode  = get_argument_integer(argc, argv, "D", 1);
@@ -110,15 +112,20 @@ int main(int argc, char** argv) {
         vector<string> filenames;
         double allele_balance = get_argument_float(argc, argv, "b", 0.5);
         bool exit_on_y = has_option(argc, argv, "Y");
-        int gap_tolerance = get_argument_integer(argc, argv, "G", 0);
+        int gap_tolerance = get_argument_integer(argc, argv, "g", 0);
         int snp_stretch = get_argument_integer(argc, argv, "l", 2);
 
         int mode = 0;
         fragment_processor* processor = NULL;
+        gtffile* gtf = NULL;
 
         if (has_option(argc, argv, "h")) {
             show_help();
             return 0;
+        }
+
+        if (filename_genome == NULL) {
+            throw invalid_argument("no genomic sequence given");
         }
 
         if (command == "rec" || command == "recombination") {
@@ -190,6 +197,11 @@ int main(int argc, char** argv) {
         if (processor == NULL) {
             throw invalid_argument("no effective mode");
         }
+        if (filename_gtf != NULL) {
+            if (verbose) cerr << "loading GTF file " << filename_gtf << "\n";
+            gtf = gtffile::load_gtf(filename_gtf);
+            processor->set_gtf(gtf);
+        }
 
         if (filename_snps != NULL) {
             if (verbose) {
@@ -240,6 +252,17 @@ int main(int argc, char** argv) {
             for (int i = 0; i < (int)fasta_files.size(); i++) {
                 cerr << "chromosome #" << (i + 1) << ":" << fasta_files[i]->name() << "\t" << fasta_files[i]->length() << endl;
             }
+            // const chromosome_seq* chrm = fasta_files[12];
+            // cout << chrm->name() << endl;
+            // for (int i = 0; i < 100; i++) {
+            //     int pos = i * 1534154 + 1000001;
+            //     cout << pos << "\t";
+            //     for (int j = 0; j < 60; j++) {
+            //         cout << chrm->get_base(j + pos);
+            //     }
+            //     cout << endl;
+            // }
+            // exit(0);
         }
 
 //        map<int,pair<int,unsigned char*> >  genome = load_genome(filename_genome);
@@ -441,6 +464,7 @@ second
                 for (int j = 0; j < (int)fasta_files.size(); j++) {
                     if (fasta_files[j]->code() == ccode) {
                         chromosome = fasta_files[j];
+                        current_chromosome = tktools::bio::convert_chromosome_to_code(chromosome->name().c_str());
                     }
                 }
                 // the chromosome in bam file is not included fasta file

@@ -74,6 +74,7 @@ namespace tkbio {
         vector<string> _strains;
         vector<cache_position*>  _indicators;//dbsnp_locus*> > _indicators;
         vector<dbsnp_locus*> _cache;
+        map<string,pair<int,int> > _cover_range;
 
         string _cache_chromosome;
         int _cache_range_start;

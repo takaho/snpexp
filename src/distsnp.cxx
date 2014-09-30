@@ -205,7 +205,9 @@ string dbsnp_file::get_cache_filename(const char* filename) {
 
 namespace {
     const unsigned int MAGIC = 0x129B6F1;
+    const unsigned int MAGIC2 = 0x129B6F2;
     int header_size = 1024;
+    const unsigned int CACHE_VERSION = 100;
 }
 
 void dbsnp_file::save_cache(const char* filename) const throw (exception) {
@@ -230,7 +232,9 @@ void dbsnp_file::save_cache(const char* filename) const throw (exception) {
     }
 
     // magic number
-    fo.write(reinterpret_cast<char const*>(&MAGIC), sizeof(unsigned int));
+    //fo.write(reinterpret_cast<char const*>(&MAGIC), sizeof(unsigned int));
+    fo.write(reinterpret_cast<char const*>(&MAGIC2), sizeof(unsigned int));
+    fo.write(reinterpret_cast<char const*>(&CACHE_VERSION), sizeof(unsigned int));
 
     // the number of chromosomes
     int num_chromosomes = probes.size();
@@ -265,6 +269,17 @@ void dbsnp_file::save_cache(const char* filename) const throw (exception) {
         fo.write(it->first.c_str(), sizeof(char) * slen);
         fo.write(reinterpret_cast<char const*>(&location), sizeof(int));
         fo.write(reinterpret_cast<char*>(&num_probes), sizeof(int));
+
+        int minpos = 0;
+        int maxpos = 0;
+        if (num_probes > 0) {
+            minpos = (it->second)[0]->position;
+            maxpos = (it->second)[it->second.size() - 1]->position;
+            cerr << it->first << "\t" << minpos << "-" << maxpos << endl;
+        }
+        fo.write(reinterpret_cast<char*>(&minpos), sizeof(int));
+        fo.write(reinterpret_cast<char*>(&maxpos), sizeof(int));
+
         pointers.push_back(make_pair(it->first, location));
         location += buffer_size;
     }
@@ -291,10 +306,15 @@ dbsnp_file* dbsnp_file::load_cache(const char* filename) throw (exception) {
 
     // magic number
     unsigned int magic;
+    unsigned int version = 0;
     fi.read(reinterpret_cast<char*>(&magic), sizeof(unsigned int));
     if (magic != MAGIC) {
-        fi.close();
-        throw runtime_error("magic number inconsistent");
+        if (magic == MAGIC2) {
+            fi.read(reinterpret_cast<char*>(&version), sizeof(unsigned int));
+        } else {
+            fi.close();
+            throw runtime_error("magic number inconsistent");
+        }
     }
 
     // the number of chromosomes
@@ -327,15 +347,23 @@ dbsnp_file* dbsnp_file::load_cache(const char* filename) throw (exception) {
     // 4-x: chromosome name
     // x-x+4:address
     // x+4-x+8:number of probes
+    // x+8-x+16:minimum position, maximum_position (version >= 100)
+    map<string,pair<int,int> > probe_range;
     for (int i = 0; i < num_chromosomes; i++) {
         int slen;
         char* cbuf;
         int num_probes, location;
+        int minpos, maxpos;
         fi.read(reinterpret_cast<char*>(&slen), sizeof(int));
         cbuf = new char[slen];
         fi.read(cbuf, sizeof(char) * slen);
         fi.read(reinterpret_cast<char*>(&location), sizeof(int));
         fi.read(reinterpret_cast<char*>(&num_probes), sizeof(int));
+        if (version >= 100) {
+            fi.read(reinterpret_cast<char*>(&minpos), sizeof(int));
+            fi.read(reinterpret_cast<char*>(&maxpos), sizeof(int));
+            probe_range[cbuf] = std::make_pair(minpos, maxpos);
+        }
         //cout << cbuf << "\t" << num_probes << " probes from " << hex << location << dec << endl;
         size_t ptr = fi.tellg();
         fi.seekg(location);
@@ -344,12 +372,20 @@ dbsnp_file* dbsnp_file::load_cache(const char* filename) throw (exception) {
             fi.read(reinterpret_cast<char*>(&cpos), sizeof(size_t));
             fi.read(reinterpret_cast<char*>(&fpos), sizeof(size_t));
             snpfile->_indicators.push_back(new cache_position(cbuf, cpos, fpos));
+            if (version < 100) {
+                if (j == 0) {
+                    
+                }
+            }
         }
         fi.seekg(ptr);
         delete[] cbuf;
     }
 
     sort(snpfile->_indicators.begin(), snpfile->_indicators.end(), cache_position_comparator);
+    if (version >= 100) {
+        snpfile->_cover_range = probe_range;
+    }
 
     fi.close();
     return snpfile;
@@ -483,13 +519,30 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
 // get snps in the given range
 // if snps out of range were selected, snps will be loaded via load_snps method
 vector<dbsnp_locus const*> dbsnp_file::get_snps(string chromosome, int start, int end) const throw (exception) {
+    vector<dbsnp_locus const*> snps;
     string cname;
     if (chromosome.find("chr") == 0) {
         cname = chromosome.substr(3, chromosome.size());
     } else {
         cname = chromosome;
     }
-    vector<dbsnp_locus const*> snps;
+    if (_cover_range.size() > 0) {
+        map<string,pair<int,int> >::const_iterator it = _cover_range.find(cname);
+        if (it != _cover_range.end()) {
+            pair<int,int> crange = it->second;
+            if (start < crange.first) {
+                start = crange.first;
+            }
+            if (end > crange.second) {
+                end = crange.second;
+            }
+        } else {
+            return snps;
+        }
+    }
+    if (start > end) {
+        return snps;
+    }
     const_cast<dbsnp_file*>(this)->load_snps(cname, start, end);
     for (int i = 0; i < (int)(_cache.size()); i++) {
         dbsnp_locus const* cp = _cache[i];
@@ -519,6 +572,8 @@ dbsnp_file* dbsnp_file::load_dbsnp(const char* filename, bool force_uncached) th
     size_t interval = CACHE_LINE_INTERVAL;
     string prev_chrom = "";
     size_t num_lines = 0;
+    int cover_minimum = 0;
+    int prev_pos = 0;
     while (!fi.eof()) {
         string line;
         size_t fpos = fi.tellg();
@@ -545,17 +600,25 @@ dbsnp_file* dbsnp_file::load_dbsnp(const char* filename, bool force_uncached) th
                 }
                         
                 string chrom = items[0];
+                size_t position = std::atoi(items[1].c_str());
                 if (chrom != prev_chrom) {
+                    if (prev_chrom != "") {
+                        snpfile->_cover_range[prev_chrom] = std::make_pair(cover_minimum, prev_pos);
+                    }
                     next_position = 0;
                     prev_chrom = chrom;
+                    cover_minimum = (int)position;
                 }
-                size_t position = std::atoi(items[1].c_str());
                 if (position >= next_position) {
                     snpfile->add_cache(chrom, position, fpos);
                     next_position += interval;
                 }
+                prev_pos = (int)position;
             }
         }
+    }
+    if (prev_chrom != "" && prev_pos > 0) {
+        snpfile->_cover_range[prev_chrom] = std::make_pair(cover_minimum, prev_pos);
     }
     snpfile->save_cache(cache.c_str());
     return snpfile;

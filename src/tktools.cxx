@@ -636,34 +636,6 @@ double tktools::stat::get_pvalue_ks_norm(int n, double const* values, double mea
         cerr << "n=" << n << ", u=" << mean << ", sd=" << sigma << ", D+=" << dmax << ", D-=" << (-dmin) << ", K=" << K << ", " << endl;
     return get_pvalue_ks( K );
     }
-
-    // if (sign == DPLUS) {
-    //     for ( int i = 0; i < n; i++ ) {
-    //         accum += div;
-    //         double d = accum - 0.5 * (1.0 + erf( (x[i] - mean) * coeff ) );
-    //         if ( d > 0.0 ) {
-    //             num_samples ++;
-    //             if (d > dmax) dmax = d;
-    //         }
-    //     }
-    // } else if (sign == DMINUS) {
-    //     for ( int i = 0; i < n; i++ ) {
-    //         accum += div;
-    //         double d = -( accum - 0.5 * (1.0 + erf( (x[i] - mean) * coeff ) ) );
-    //         if ( d > 0.0 ) {
-    //             num_samples ++;
-    //             if (d > dmax) dmax = d;
-    //         }
-    //     }
-    // } else {
-    //     for ( int i = 0; i < n; i++ ) {
-    //         accum += div;
-    //         double d = fabs( accum - 0.5 * (1.0 + erf( (x[i] - mean) * coeff ) ) );
-    //         if (d > dmax) dmax = d;
-    //         num_samples++;
-    //     }
-    // }
-    //double K = dmax * sqrt((double)num_samples);
 }
 
 double tktools::stat::get_pvalue_ks_pair(int n, double const* x, int m, double const* y) {
@@ -709,24 +681,11 @@ double tktools::stat::get_pvalue_ks_pair(int n, double const* x, int m, double c
     delete[] Y;
     double K = dmax * sqrt( m * n / (m + n) );
     return get_pvalue_ks( K );
-    // if (K <= 0.0 ) return 1.0;
-    // int j = 1;
-    // double accum_p = 0.0;
-    // double e2_ = - 2 * K * K;
-    // while (true) {
-    //     double p = ((j & 1) == 0) ? -exp(e2_ * j * j) : exp(e2_ * j * j);
-    //     accum_p += p;
-    //     if (fabs(p) < 1e-100) break;
-    //     j ++;
-    // }
-
-    // double pvalue = 2.0 * accum_p;
-    // return pvalue;
 }
 
 namespace {
     bool option_duplicated( int argc, char** argv, const char* option = NULL ) {
-        if ( option == NULL || strlen( option ) <= 1 ) {
+        if ( option == NULL || strlen( option ) == 0) {//<= 1 ) {
             for ( int i = 1; i < argc; i++ ) {
                 if ( argv[ i ][ 0 ] == '-' ) {
                     for ( int j = i + 1; j < argc; j++ ) {

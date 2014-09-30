@@ -3,6 +3,7 @@
 #include <vector>
 #include <sstream>
 #include <algorithm>
+#include <limits>
 
 using std::cout;
 using std::endl;
@@ -15,6 +16,7 @@ using std::make_pair;
 #include <recrec.hxx>
 #include <distsnp.hxx>
 #include <tktools.hxx>
+#include <gtf.hxx>
 
 using tktools::split_items;
 using namespace tkbio;
@@ -22,6 +24,7 @@ using namespace tkbio;
 fragment_processor::fragment_processor() {
     _variation_db = NULL;
     _quality_threshold = 10;
+    _gtffile = NULL;
 }
 
 fragment_processor::~fragment_processor() {
@@ -100,6 +103,10 @@ recombination_detector::recombination_detector(int coverage, float hetero_thresh
     _gap_tolerance = 0;
     _allele_balance = 0.0;
     _recombination_mode = DSBR;
+}
+
+void recombination_detector::set_gtf(gtffile const* gtf) throw (exception) {
+    throw runtime_error("recombination detection does not support GTF file");
 }
 
 void recombination_detector::set_detection_mode(Mode mode) {
@@ -401,10 +408,81 @@ void fragment_processor::set_display_mode(int mode) throw (std::invalid_argument
   _display_mode = mode;
 }
 
+namespace {
+    bool compare_by_second(const pair<int,int>& lhs, const pair<int,int>& rhs) {
+        return lhs.second < rhs.second;
+    }
+    int get_next_position(const vector<pair<int,int> >& exons, int position) {
+        if (exons.size() == 0) {
+            return std::numeric_limits<int>::max();
+        }
+        int left = 0;
+        int right = (int)exons.size();
+        for (;;) {
+            int center = (left + right) >> 1;
+            const pair<int,int>& exon = exons[center];
+            if (exon.first > position) {
+                left = center + 1;
+            } else if (exon.second < position) {
+                right = center;
+            } else {
+                return position;
+            }
+            if (left == right) {
+                return std::numeric_limits<int>::max();
+            }
+        }
+    }
+}
+
+// namespace {
+//     vector<pair<int,int> > get_exon_regions(
+// }
+
 void snp_enumerator::process_fragments(const vector<recfragment*>& fragments,
                                        chromosome_seq const* chromosome,
                                        int start, int end, ostream& ost) 
     throw (exception){
+
+    // use GTF
+    vector<pair<int,int> > exons;
+    if (_gtffile != NULL) {
+        vector<const gtfgene*> genes = _gtffile->find_genes(chromosome->name(), start, end);
+        for (int i = 0; i < (int)genes.size(); i++) {
+            const vector<gtfexon>& geneexons = genes[i]->exons();
+            for (int j = 0; j < geneexons.size(); j++) {
+                pair<int,int> epos = geneexons[j].position();
+                if (epos.second < start || epos.first > end) continue;
+                exons.push_back(epos);
+            }
+        }
+        if (exons.size() == 0) {
+            return;
+        }
+        sort(exons.begin(), exons.end(), compare_by_second);
+        for (int i = (int)exons.size() - 1; i >= 0; i--) {
+            if (exons[i].first == exons[i].second) continue;
+            for (int j = i - 1; j >= 0; j--) {
+                if (exons[j].second < exons[i].first) {
+                    break;
+                } else {
+                    exons[i].first = std::min(exons[i].first, exons[j].first);
+                    exons[i].second = std::max(exons[i].second, exons[j].second);
+                    exons[j].first = exons[j].second;
+                }
+            }
+        }
+        int index = 0;
+        for (int i = 0; i < (int)exons.size(); i++) {
+            pair<int,int>& e = exons[i];
+            if (e.first != e.second) {
+                exons[index] = e;
+                index++;
+            }
+        }
+        exons.erase(exons.begin() + index, exons.end());
+    }
+
     if (_variation_db != NULL) {
         //set<int> pos;
         vector<dbsnp_locus const*> snps = _variation_db->get_snps(chromosome->name(), start, end);
@@ -438,11 +516,19 @@ void snp_enumerator::process_fragments(const vector<recfragment*>& fragments,
         }
     } else {
         for (int pos = start; pos < end; pos++) {
+            if (_gtffile != NULL) {
+                pos = get_next_position(exons, pos);
+                if (pos >= end) {
+                    break;
+                }
+            }
+
             char ref = chromosome->get_base(pos);
             int refind = get_index(ref);
             if (refind < 0) continue;
             int freq[5];
-            freq[0] = freq[1] = freq[2] = freq[3] = freq[4] = 0;
+            for (int i = 0; i < 5; i++) { freq[i] = 0; }
+            //freq[0] = freq[1] = freq[2] = freq[3] = freq[4] = 0;
             int total = 0;
             for (int j = 0; j < (int)fragments.size(); j++) {
                 const recfragment* frag = fragments[j];
@@ -463,7 +549,7 @@ void snp_enumerator::process_fragments(const vector<recfragment*>& fragments,
                 }
             }
             if (max_ind >= 0 && max_minor >= (int)((freq[refind] + max_minor) * _minimum_minor_ratio + 0.5)) {
-                ost << chromosome->name() << "\t" << pos << "\t" << nucleotides[refind] << "\t" << nucleotides[max_ind];
+                ost << chromosome->name() << "\t" << pos << "\t" << ref << "\t" << nucleotides[max_ind];
                 for (int j = 0; j < 5; j++) {
                     ost << "\t" << freq[j];
                 }
