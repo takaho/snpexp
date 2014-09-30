@@ -559,8 +559,12 @@ dbsnp_file* dbsnp_file::load_dbsnp(const char* filename, bool force_uncached) th
     if (!force_uncached) {
         //cout << cache << endl;
         if (file_exists(cache.c_str())) {
-            dbsnp_file* sf = load_cache(cache.c_str());
-            return sf;
+            try {
+                dbsnp_file* sf = load_cache(cache.c_str());
+                return sf;
+            } catch (exception& e) {
+                cerr << e.what() << endl;
+            }
         }
     }
     ifstream fi(filename);
@@ -574,27 +578,29 @@ dbsnp_file* dbsnp_file::load_dbsnp(const char* filename, bool force_uncached) th
     size_t num_lines = 0;
     int cover_minimum = 0;
     int prev_pos = 0;
+    //int num_strains = 0;
+    unsigned int minimum_columns = std::numeric_limits<unsigned int>::max();
     while (!fi.eof()) {
         string line;
         size_t fpos = fi.tellg();
         getline(fi, line);
-        if (snpfile == NULL) {//strains.size() == 0) {
+        if (snpfile == NULL) {
             if (line.find("#CHROM") == 0) {
                 vector<string> strains;
                 vector<string> items = split_items(line, '\t');
-                //cout << line << endl;
+                if (items.size() > 9) {
+                    minimum_columns = items.size();
+                } else {
+                    minimum_columns = items.size();
+                }
                 for (int i = 9; i < (int)items.size(); i++) {
                     strains.push_back(items[i]);
-                    //cout << strains.size() << ":" << items[i] << endl;
                 }
-                if (strains.size() > 0) {
-                    snpfile = new dbsnp_file(filename, strains);
-                }
-                //cout << line << endl;
+                snpfile = new dbsnp_file(filename, strains);
             }
         } else {
             vector<string> items = split_items(line, '\t');
-            if ((int)items.size() >= snpfile->strain_size() + 9) {
+            if (items.size() >= minimum_columns) {
                 if (++num_lines % 1000 == 0) {
                     cerr << " " << (num_lines / 1000) << " " << items[0] << ":" << items[1] << "        \r";
                 }
@@ -619,6 +625,8 @@ dbsnp_file* dbsnp_file::load_dbsnp(const char* filename, bool force_uncached) th
     }
     if (prev_chrom != "" && prev_pos > 0) {
         snpfile->_cover_range[prev_chrom] = std::make_pair(cover_minimum, prev_pos);
+    } else {
+        throw runtime_error("invalid VCF file : no SNPs");
     }
     snpfile->save_cache(cache.c_str());
     return snpfile;
