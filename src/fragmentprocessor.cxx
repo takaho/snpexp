@@ -435,6 +435,30 @@ namespace {
     }
 }
 
+namespace {
+    bool check_heterozygosity(int counts[5], double hvalue, int reference) {
+        if (reference < 0 || reference > 5) {
+            return false;
+        }
+        int num = counts[reference];
+        int max_index = -1;
+        int max_counts = 0;
+        for (int i = 0; i < 4; i++) {
+            if (i != reference && counts[i] > max_counts) {
+                max_counts = counts[i];
+                max_index = i;
+            }
+        }
+        int total = max_counts + num;
+        double ratio = (double)num / total;
+        if (ratio >= hvalue && hvalue <= 1.0 - hvalue) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+}
+
 // namespace {
 //     vector<pair<int,int> > get_exon_regions(
 // }
@@ -507,12 +531,14 @@ void snp_enumerator::process_fragments(const vector<recfragment*>& fragments,
 	    if (_display_mode > 1 && (symbol == "." || symbol == "-" || symbol == "0/0")) {
                 continue;
 	    }
-            ost << chromosome->name() << "\t" << position << "\t" << snps[i]->reference() << "\t" << snps[i]->alternative();
-            ost << "\t" << symbol;
-            for (int j = 0; j < 5; j++) {
-                ost << "\t" << freq[j];
+            if (_display_mode == 0 || (_display_mode > 0 && check_heterozygosity(freq, _minimum_minor_ratio, get_index(snps[i]->reference().c_str()[0])))) {
+                ost << chromosome->name() << "\t" << position << "\t" << snps[i]->reference() << "\t" << snps[i]->alternative();
+                ost << "\t" << symbol;
+                for (int j = 0; j < 5; j++) {
+                    ost << "\t" << freq[j];
+                }
+                ost << "\n";
             }
-            ost << "\n";
         }
     } else {
         for (int pos = start; pos < end; pos++) {
