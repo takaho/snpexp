@@ -37,7 +37,7 @@ using namespace std;
 #include <bam.h>
 
 #include <tktools.hxx>
-//#include <seq_gene.hxx>
+#include <seq_gene.hxx>
 #include <gtf.hxx>
 #include <snpexp.hxx>
 
@@ -146,11 +146,95 @@ namespace {
     }
 }
 
+namespace {
+    void annotate_gene(int argc, char** argv) throw (exception) {
+        const char* genefile = get_argument_string(argc, argv, "g", NULL);
+        const char* assembly = get_argument_string(argc, argv, "a", " GRCh38-Primary Assembly");//NULL);
+        const char* filename = get_argument_string(argc, argv, "i", NULL);
+        const char* filename_output = get_argument_string(argc, argv, "o", NULL);
+        //vector<string> filenames;
+        bool verbose = has_option(argc, argv, "verbose");
+        if (verbose) {
+            cerr << "seq_gene filename    : " << genefile << endl;
+            cerr << "assembly             : " << assembly << endl;
+            cerr << "filename             : " << filename << endl;
+            cerr << "output               : " << (filename_output == NULL ? "stdout" : filename_output) << endl;
+        }
+        // for (int i = 1; i < argc; i++) {
+        //     string fn = argv[i];
+        //     if (tktools::io::file_exists(fn.c_str()) && fn.rfind(".txt") == fn.size() - 4) {
+        //         filenames.push_back(fn);
+        //     }
+        // }
+        vector<seq_gene*> genes = seq_gene::load(genefile, assembly, verbose);
+        ifstream fi(filename);
+        ostream* ost = &cout;
+        if (filename_output != NULL) {
+            ofstream* fo = new ofstream(filename_output);
+            if (fo->is_open() == false) {
+                throw invalid_argument("cannot open output file");
+            }
+            ost = fo;
+        }
+        int chrom_code = -1;
+        string prev_chrom;
+        while (!fi.eof()) {
+            string line;
+            getline(fi, line);
+            vector<string> items = split_items(line, '\t');
+            if (items.size() < 8) {
+                continue;
+            }
+            *ost << line << "\t";
+            if (items[0] != prev_chrom) {
+                chrom_code = convert_chromosome_to_code(items[0].c_str());
+                prev_chrom = items[0];
+            }
+            int pos = atoi(items[1].c_str());
+            vector<const seq_gene*> containers = seq_gene::find_genes(genes, chrom_code, pos, pos + 1);
+            if (containers.size() == 0) {
+                *ost << ".";
+            } else {
+                set<string> touched;
+                for (int i = 0; i < (int)containers.size(); i++) {
+                    const seq_gene* g = containers[i];
+                    if (touched.find(g->symbol()) == touched.end()) {
+                        if (touched.size() > 0) {
+                            *ost << " /// ";
+                        }
+                        *ost << g->symbol();
+                        touched.insert(g->symbol());
+                    }
+                }
+            }
+            *ost << "\n";
+        }
+        fi.close();
+
+        if (filename_output != NULL) {
+            dynamic_cast<ofstream*>(ost)->close();
+            delete ost;
+        }
+        for (int i = 0; i < (int)genes.size(); i++) {
+            delete genes[i];
+        }
+    }
+}
 
 int main(int argc, char** argv) {
     try {
+        string command;
+        if (argc < 2) {
+            throw illegal_argument("no command");
+        }
+        command = argv[1];
 
-        if (true) {
+        if (command == "gene") {
+            annotate_gene(argc, argv);
+            return 0;
+        }
+
+        if (command == "rsid") {
             annotate_rsid(argc, argv);
             return 0;
         }
