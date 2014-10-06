@@ -441,12 +441,12 @@ namespace {
             return false;
         }
         int num = counts[reference];
-        int max_index = -1;
+        //int max_index = -1;
         int max_counts = 0;
         for (int i = 0; i < 4; i++) {
-            if (i != reference && counts[i] > max_counts) {
+	  if (i != reference && counts[i] > (int)max_counts) {
                 max_counts = counts[i];
-                max_index = i;
+                //max_index = i;
             }
         }
         int total = max_counts + num;
@@ -474,7 +474,7 @@ void snp_enumerator::process_fragments(const vector<recfragment*>& fragments,
         vector<const gtfgene*> genes = _gtffile->find_genes(chromosome->name(), start, end);
         for (int i = 0; i < (int)genes.size(); i++) {
             const vector<gtfexon>& geneexons = genes[i]->exons();
-            for (int j = 0; j < geneexons.size(); j++) {
+            for (int j = 0; j < (int)geneexons.size(); j++) {
                 pair<int,int> epos = geneexons[j].position();
                 if (epos.second < start || epos.first > end) continue;
                 exons.push_back(epos);

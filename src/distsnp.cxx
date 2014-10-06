@@ -503,7 +503,7 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
         vector<string> items = split_items(line, '\t');
         //cout << items[0] << ":" << items[1] << "\t" << items[2] << endl;
         if (items[0] != chromosome) break;
-        if (items.size() >= _strains.size() + col_strain) {
+        if (_strains.size() == 0 || items.size() >= _strains.size() + col_strain) {
             int pos = atoi(items[1].c_str());
             dbsnp_locus* snp = new dbsnp_locus(pos, items[2], items[3], items[4], _strains.size());
             for (int i = 0; i < (int)_strains.size(); i++) {
