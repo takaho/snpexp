@@ -225,7 +225,7 @@ int main(int argc, char** argv) {
     try {
         string command;
         if (argc < 2) {
-            throw illegal_argument("no command");
+            throw runtime_error("no command");
         }
         command = argv[1];
 

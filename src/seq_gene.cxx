@@ -44,16 +44,21 @@ seq_gene::~seq_gene() {
 bool seq_gene::contains(int chromosome_code, int start, int end) const {
     int left = 0;
     int right = _exons.size();
+    if (chromosome_code != _chrm || start > _end || end < _start) {
+        return false;
+    }
+    //cout << start << "-" << end << " // " << _start << "-" << _end << endl;
     for (;;) {
         if (left == right) {
             return false;
         }
         int index = (left + right) / 2;
         const exon& e = _exons[index];
+        //cout << index << "/" << _exons.size() << " : " << e._start << "-" << e._end << endl;
         if (e._start > end) {
-            left = index + 1;
-        } else if (e._end < start) {
             right = index;
+        } else if (e._end < start) {
+            left = index + 1;
         } else {
             //if (e._start <= end && e._end >= start) {
             return true;
@@ -620,6 +625,10 @@ vector<const seq_gene*> seq_gene::find_genes(const vector<seq_gene*>& genes, int
     int left = 0;
     int right = (int)genes.size();
     int index = 0;
+    vector<const seq_gene*> selected;
+    if (right == 0) {
+        return selected;
+    }
     for (;;) {
         index = (left + right) / 2;
         if (left == right) {
@@ -639,14 +648,13 @@ vector<const seq_gene*> seq_gene::find_genes(const vector<seq_gene*>& genes, int
             break;
         }
     }
-    vector<const seq_gene*> selected;
     for (int i = index; i >= 0; i--) {
         const seq_gene* g = genes[i];
-        //cout << *g << endl;
         if (g->_chrm != chromosome_code || g->_end + maximum_size < start) {
             break;
         } else if (g->contains(chromosome_code, start, end)) {
             //} else if (g->_end >= start && g->_start <= end) {
+            //cout << *g << endl;
             selected.push_back(g);
         }
     }
@@ -657,6 +665,7 @@ vector<const seq_gene*> seq_gene::find_genes(const vector<seq_gene*>& genes, int
             break;
         } else if (g->contains(chromosome_code, start, end)) {//g->_end >= start && g->_start <= end) {
 //        } else if (g->_end >= start && g->_start <= end) {
+            //cout << *g << endl;
             selected.push_back(g);
         }
     }
