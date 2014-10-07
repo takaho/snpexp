@@ -63,6 +63,70 @@ namespace {
     }
 }    
 
+namespace {
+  void filter_snps_by_strain(int argc, char** argv) throw (exception) {
+    const char* filename_snps = get_argument_string(argc, argv, "V", NULL);
+    const char* filename_count = get_argument_string(argc, argv, "i", NULL);
+    const char* filename_output = get_argument_string(argc, argv, "o", NULL);
+    const char* strain = get_argument_string(argc, argv, "S", "129S1");
+    bool verbose = has_option(argc, argv, "verbose");
+
+    if (verbose) {
+      cerr << "SNPs      : " << filename_snps << endl;
+      cerr << "Input     : " << filename_count << endl;
+      cerr << "Output    : " << (filename_output == NULL ? "stdout" : filename_output) << endl;
+      cerr << "Strain    : " << strain << endl;
+    }
+
+    ifstream fi(filename_count);
+    dbsnp_file* dbsnp = dbsnp_file::load_dbsnp(filename_snps);
+    int strain_index = dbsnp->get_strain_index(strain);
+    ostream* ost = &cout;
+    cerr << strain_index << endl;
+
+    if (strain_index < 0) {
+      delete dbsnp;
+      throw invalid_argument("no strain");
+    }
+
+    if (filename_output != NULL) {
+      ofstream* fo = new ofstream(filename_output);
+      if (fo->is_open() == false) {
+	delete fo;
+	throw invalid_argument("cannot open output stream");
+      }
+      ost = fo;
+    }
+    size_t num_lines = 0;
+    while (!fi.eof()) {
+      string line;
+      getline(fi, line);
+      num_lines ++;
+      vector<string> items = split_items(line, '\t');
+      if (verbose && num_lines % 1000 == 0) {
+	cerr << (num_lines / 1000) << "k " << items[0] << ":" << items[1] << "       \r";
+      }
+      dbsnp_locus const* snp = dbsnp->get_snp(items[0], atoi(items[1].c_str()));
+      if (snp != NULL) {
+	unsigned char ref = snp->get_genotype(0);
+	unsigned char alt = snp->get_genotype(strain_index);
+	if (ref != alt) {
+	  *ost << line << endl;
+	}
+      }
+    }
+    fi.close();
+    delete dbsnp;
+    if (verbose) {
+      cerr << "loading genomic sequences " << flush;
+    }
+    if (filename_output != NULL) {
+      dynamic_cast<ofstream*>(ost)->close();
+      delete ost;
+    }
+  }
+}
+
 
 namespace {
     void show_help() {
@@ -124,16 +188,28 @@ int main(int argc, char** argv) {
             return 0;
         }
 
-        if (filename_genome == NULL) {
-            throw invalid_argument("no genomic sequence given");
-        }
-
         if (command == "rec" || command == "recombination") {
             mode = 0;
         } else if (command == "count") {
             mode = 1;
         } else if (command == "dist") {
             mode = 2;
+        } else if (command == "filter") {
+	  mode = 3;
+	}
+
+	if (mode == 3) {
+	  try {
+	    filter_snps_by_strain(argc, argv);
+	    return 0;
+	  } catch (exception& e) {
+	    cerr << "error in filtering\n";
+	    throw;
+	  }
+	}
+
+        if (filename_genome == NULL) {
+            throw invalid_argument("no genomic sequence given");
         }
 
 	if (mode == 2) {

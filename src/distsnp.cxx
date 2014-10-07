@@ -189,6 +189,15 @@ dbsnp_file::dbsnp_file(const char* filename, const vector<string>& strains) {
     _cache_range_start = _cache_range_end = 0;
 }
 
+int dbsnp_file::get_strain_index(const string& strain) const {
+  for (int i = 0; i < (int)_strains.size(); i++) {
+    if (strain == _strains[i]) {
+      return i;
+    }
+  }
+  return -1;
+}
+
 string dbsnp_file::get_cache_filename(const char* filename) {
     int slen = strlen(filename);
     string dirname;
@@ -401,13 +410,36 @@ dbsnp_file::~dbsnp_file() {
 }
 
 void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
+    string cname;
+    if (chromosome.find("chr") == 0) {
+        cname = chromosome.substr(3, chromosome.size());
+    } else {
+        cname = chromosome;
+    }
+    if (_cover_range.size() > 0) {
+        map<string,pair<int,int> >::const_iterator it = _cover_range.find(cname);
+        if (it != _cover_range.end()) {
+            pair<int,int> crange = it->second;
+            if (start < crange.first) {
+                start = crange.first;
+            }
+            if (end > crange.second) {
+                end = crange.second;
+            }
+        } else {
+	  return;
+        }
+    }
+    if (start > end) {
+      return;
+    }
     //cout << "CACHED RANGE:" << _cache_range_start << ", " << _cache_range_end << endl;
-    if (_cache_chromosome == chromosome) {
+    if (_cache_chromosome == cname) {//hromosome) {
         if (_cache_range_start <= start && end <= _cache_range_end) {
             return;
         }
     } else {
-        _cache_chromosome = chromosome;
+      _cache_chromosome = cname;//chromosome;
         _cache_range_start = _cache_range_end = 0;
     }
     //cout << "start ? " << (_cache_range_start <= start) << ", end ? " << (end <= _cache_range_end) << endl;
@@ -426,9 +458,9 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
         const cache_position* probe = _indicators[center];
         int p = (int)probe->position;
         //cout << center << "\t" << left << "," << right << "\t" << (start) << "-" << (end) << "\t" << chromosome << "/" << probe->chromosome << ":" << (p) << "\t" << (p - start) << ", " << (end - p) << endl;
-        if (probe->chromosome < chromosome) {
+        if (probe->chromosome < cname) {//chromosome) {
             left = center + 1;
-        } else if (probe->chromosome > chromosome) {
+        } else if (probe->chromosome > cname) {//chromosome) {
             right = center; 
         } else if (p < start) {//(int)probe->position < start) {
             left = center + 1;
@@ -450,7 +482,7 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
     int right_index = _indicators.size() - 1;//center;
     while (index >= 0) {
         const cache_position* probe = _indicators[index];
-        if (probe->chromosome != chromosome || (int)probe->position < start) {
+        if (probe->chromosome != cname || (int)probe->position < start) {
             left_limit = probe->file_position;
             left_index = index;
             //cout << index << ":" << left_limit << endl;
@@ -466,7 +498,7 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
     while (index < (int)_indicators.size()) {
         const cache_position* probe = _indicators[index];
         //cout << probe->position << ", " << probe->file_position << endl;
-        if (probe->chromosome != chromosome || (int)probe->position > end) {
+        if (probe->chromosome != cname || (int)probe->position > end) {
             right_limit = probe->file_position;
             right_index = index;
             //cout << index << ":" << right_limit << endl;
@@ -476,17 +508,17 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
     }
     //cout << left_index << " , " << right_index << endl;
 
-    if (_indicators[center]->chromosome == chromosome) {
+    if (_indicators[center]->chromosome == cname) {
         _cache_range_start = std::min((int)_indicators[left_index]->position + 1, start);
         _cache_range_end = std::max((int)_indicators[right_index]->position - 1, end);
-        if (right_index >= (int)_indicators.size() || _indicators[right_index]->chromosome != chromosome) {
+        if (right_index >= (int)_indicators.size() || _indicators[right_index]->chromosome != cname) {//chromosome) {
             _cache_range_end = std::numeric_limits<int>::max();
         }
     } else {
-        if (index >= (int)_indicators.size() - 1 || _indicators[index + 1]->chromosome > chromosome) {
+      if (index >= (int)_indicators.size() - 1 || _indicators[index + 1]->chromosome > cname) {//chromosome) {
             _cache_range_end = std::numeric_limits<int>::max();
         }
-        if (index == 0 || _indicators[index - 1]->chromosome < chromosome) {
+        if (index == 0 || _indicators[index - 1]->chromosome < cname) {
             _cache_range_start = 0;
         }
     }
@@ -502,7 +534,7 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
         getline(fi, line);
         vector<string> items = split_items(line, '\t');
         //cout << items[0] << ":" << items[1] << "\t" << items[2] << endl;
-        if (items[0] != chromosome) break;
+        if (items[0] != cname) break;//chromosome) break;
         if (_strains.size() == 0 || items.size() >= _strains.size() + col_strain) {
             int pos = atoi(items[1].c_str());
             dbsnp_locus* snp = new dbsnp_locus(pos, items[2], items[3], items[4], _strains.size());
@@ -516,34 +548,30 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
     fi.close();
 }
 
+dbsnp_locus const* dbsnp_file::get_snp(const string& chromosome, int position) const {
+  const_cast<dbsnp_file*>(this)->load_snps(chromosome, position, position + 1);
+    int left = 0;
+    int right = _cache.size();
+    for (;;) {
+      if (left == right) break;
+      int index = (left + right) >> 1;
+      dbsnp_locus const* cp = _cache[index];
+      if (cp->_position < position) {
+	left = index + 1;
+      } else if (cp->_position > position) {
+	right = index;
+      } else {
+	return cp;
+      }
+    }
+    return NULL;
+}
+
 // get snps in the given range
 // if snps out of range were selected, snps will be loaded via load_snps method
 vector<dbsnp_locus const*> dbsnp_file::get_snps(string chromosome, int start, int end) const throw (exception) {
     vector<dbsnp_locus const*> snps;
-    string cname;
-    if (chromosome.find("chr") == 0) {
-        cname = chromosome.substr(3, chromosome.size());
-    } else {
-        cname = chromosome;
-    }
-    if (_cover_range.size() > 0) {
-        map<string,pair<int,int> >::const_iterator it = _cover_range.find(cname);
-        if (it != _cover_range.end()) {
-            pair<int,int> crange = it->second;
-            if (start < crange.first) {
-                start = crange.first;
-            }
-            if (end > crange.second) {
-                end = crange.second;
-            }
-        } else {
-            return snps;
-        }
-    }
-    if (start > end) {
-        return snps;
-    }
-    const_cast<dbsnp_file*>(this)->load_snps(cname, start, end);
+    const_cast<dbsnp_file*>(this)->load_snps(chromosome, start, end);
     for (int i = 0; i < (int)(_cache.size()); i++) {
         dbsnp_locus const* cp = _cache[i];
         if (start <= (int)cp->_position && (int)cp->_position <= end) {
