@@ -183,7 +183,20 @@ vector<str_variation> str_collection::get_variations(int coverage, double hetero
             }
         }
     }
+    vector<str_variation> unique;
     for (int i = 0; i < (int)alleles.size(); i++) {
+        bool overlap = false;
+        for (int j = i + 1; j < (int)alleles.size(); j++) {
+            if (alleles[i] == alleles[j]) {
+                overlap = true;
+                break;
+            }
+        }
+        if (!overlap) {
+            unique.push_back(alleles[i]);
+        }
+    }
+    for (int i = 0; i < (int)unique.size(); i++) {
         
     }
     //for (int i = 0; i < 
