@@ -556,9 +556,9 @@ dbsnp_locus const* dbsnp_file::get_snp(const string& chromosome, int position) c
       if (left == right) break;
       int index = (left + right) >> 1;
       dbsnp_locus const* cp = _cache[index];
-      if (cp->_position < position) {
+      if ((int)cp->_position < position) {
 	left = index + 1;
-      } else if (cp->_position > position) {
+      } else if ((int)cp->_position > position) {
 	right = index;
       } else {
 	return cp;

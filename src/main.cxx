@@ -32,6 +32,7 @@ using std::set;
 #include <recrec.hxx>
 #include <fragmentprocessor.hxx>
 #include <distsnp.hxx>
+#include <varstr.hxx>
 
 using namespace tkbio;
 
@@ -43,25 +44,25 @@ using tktools::split_items;
 using tktools::bio::convert_chromosome_to_code;
 using tktools::bio::convert_code_to_chromosome;
 
-namespace {
-    bool check_header_consistency(int num, bam_header_t** headers) {
-        for (int i = 0; i < num; i++) {
-            bam_header_t* hi = headers[i];
-            for (int j = 0; j < i; j++) {
-                bam_header_t* hj = headers[j];
-                if (hi->n_targets != hj->n_targets) {
-                    return false;
-                }
-                for (int k = 0; k < hi->n_targets; k++) {
-                    if (strcmp(hi->target_name[k], hj->target_name[k]) != 0) {
-                        return false;
-                    }
-                }
-            }
-        }
-        return true;
-    }
-}    
+// namespace {
+//     bool check_header_consistency(int num, bam_header_t** headers) {
+//         for (int i = 0; i < num; i++) {
+//             bam_header_t* hi = headers[i];
+//             for (int j = 0; j < i; j++) {
+//                 bam_header_t* hj = headers[j];
+//                 if (hi->n_targets != hj->n_targets) {
+//                     return false;
+//                 }
+//                 for (int k = 0; k < hi->n_targets; k++) {
+//                     if (strcmp(hi->target_name[k], hj->target_name[k]) != 0) {
+//                         return false;
+//                     }
+//                 }
+//             }
+//         }
+//         return true;
+//     }
+// }    
 
 namespace {
   void filter_snps_by_strain(int argc, char** argv) throw (exception) {
@@ -196,7 +197,18 @@ int main(int argc, char** argv) {
             mode = 2;
         } else if (command == "filter") {
 	  mode = 3;
-	}
+        } else if (command == "str") {
+             mode = 4;
+        }
+
+        if (mode == 4) {
+            try {
+                strcollection::detect_str(argc, argv);
+                return 0;
+            } catch (exception& e) {
+                throw;
+            }
+        }
 
 	if (mode == 3) {
 	  try {
@@ -268,7 +280,13 @@ int main(int argc, char** argv) {
             snp_enumerator* _proc = new snp_enumerator(coverage, heterozygosity);
             _proc->set_display_mode(display_mode);
             processor = _proc;//new snp_enumerator(coverage, heterozygosity);
-        } else if (mode == 2) {
+        // } else if (mode == 4) {
+        //     if (filename_snps != NULL) {
+        //         throw invalid_argument("STR mode does not require SNPs");
+        //     }
+        //     str_detector* _proc = new str_detector(coverage, heterozygosity);
+        //     _proc->set_display_mode(display_mode);
+        //     processor = _proc;
         }
         if (processor == NULL) {
             throw invalid_argument("no effective mode");
@@ -361,7 +379,7 @@ int main(int argc, char** argv) {
             reads[i] = bam_init1();
             status[i] = 0x00;
         }
-        if (check_header_consistency(num_files, headers) == false) {
+        if (tkbio::check_header_consistency(num_files, headers) == false) {
             throw runtime_error("incompatible bam files");
         }
 

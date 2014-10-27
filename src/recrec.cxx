@@ -944,3 +944,21 @@ ostream& operator << (ostream& ost, const recfragment& rhs) {
 }
 
 
+    // functions
+bool tkbio::check_header_consistency(int num, bam_header_t** headers) {
+    for (int i = 0; i < num; i++) {
+        bam_header_t* hi = headers[i];
+        for (int j = 0; j < i; j++) {
+            bam_header_t* hj = headers[j];
+            if (hi->n_targets != hj->n_targets) {
+                return false;
+            }
+            for (int k = 0; k < hi->n_targets; k++) {
+                if (strcmp(hi->target_name[k], hj->target_name[k]) != 0) {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}

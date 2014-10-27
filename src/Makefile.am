@@ -1,6 +1,7 @@
 bin_PROGRAMS = snpexp trimvcf recrec 
 #managevcf_SOURCES = managevcf.cxxtktools.hxx tktools.cxx 
-recrec_SOURCES = recrec.cxx recrec.hxx tktools.hxx tktools.cxx gtf.hxx gtf.cxx main.cxx fragmentprocessor.hxx fragmentprocessor.cxx distsnp.cxx distsnp.hxx
+#varstr_SOURCES = recrec.cxx recrec.hxx tktools.hxx tktools.cxx varstr.hxx varstr.cxx
+recrec_SOURCES = recrec.cxx recrec.hxx tktools.hxx tktools.cxx gtf.hxx gtf.cxx main.cxx fragmentprocessor.hxx fragmentprocessor.cxx distsnp.cxx distsnp.hxx varstr.cxx varstr.hxx
 snpexp_SOURCES = snpexp.cxx snpexp.hxx tktools.hxx tktools.cxx gtf.hxx gtf.cxx 
 trimvcf_SOURCES = trimvcf.hxx trimvcf.cxx gtf.hxx gtf.cxx tktools.hxx tktools.cxx seq_gene.hxx seq_gene.cxx
 CXX = c++

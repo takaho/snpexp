@@ -1,5 +1,5 @@
-#ifndef TKBIO_H
-#define TKBIO_H
+#ifndef TKBIO_RECREC_H
+#define TKBIO_RECREC_H
 
 #include <string>
 #include <bam.h>
@@ -225,6 +225,8 @@ namespace tkbio {
         static bool compare_fragment_order(const recfragment* lhs, 
                                            const recfragment* rhs);
     };
+
+    bool check_header_consistency(int num, bam_header_t** headers);
 
 }
 

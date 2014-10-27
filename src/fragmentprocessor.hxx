@@ -49,6 +49,19 @@ namespace tkbio {
         virtual void set_display_mode(int mode) throw (std::invalid_argument);
         //static void remove_outside_exons(vector<recfragmentgtffile const* gtf, chromosome_seq count* chromosome, int start, int end) throw (exception);
     };
+
+    // class str_detector : public fragment_processor {
+    //     int _coverage;
+    //     int _
+    // public:
+    //     virtual ~str_detector();
+    //     void set_gtf(gtffile const* gtf) throw (exception) {
+    //         throw invalid_argument("STR does not require gene assemblies");
+    //     }
+    //     void process_fragment(conver vector<recfragment*>& fragmetns,
+    //                                  chromosome_seq const* chromosome,
+    //                                  int start, int end, ostream& ost) throw (exception);
+    // };
     
     class recombination_detector : public fragment_processor {
         typedef enum Mode {DSBR=1, Meiotic=2, BOTH=3} Mode;
