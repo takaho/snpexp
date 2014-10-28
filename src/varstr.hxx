@@ -49,7 +49,7 @@ namespace tkbio {
         static int get_position(ullong info) { return (int)info & 0xffffffff; }
         static int get_span(ullong info) { return (int)((info >> 32) & 0xffff); }
         static char get_feature(ullong info);// { return info & FEATURE_MASK; }
-        bool covers(int start, int end) const { return start <= _start && end <= _stop; }
+        bool covers(int start, int end) const;
         bool shares_variation(ullong section) const;
         bool has_reference_at(int start, int end) const;
 
@@ -58,19 +58,24 @@ namespace tkbio {
     };
 
     class str_variation {
-        int _position;
-        int _reference_span;
-        int _read_span;
+        ullong _code;
         int _num_shares;
         int _num_reference;
         int _num_others;
     public:
         str_variation();
+        str_variation(ullong section_code);
         str_variation(int position, int reference_span, int read_span);
         void set_counts(int share, int reference, int others);
-
+        int occurrence() const { return _num_shares; }
+        int opposite() const { return _num_reference; }
+        int coverage() const { return _num_shares + _num_reference + _num_others; }
         string to_string() const;
-        ullong encode() const;
+        ullong code() const { return _code; }
+        int reference_span() const;
+        int read_span() const;
+        int position() const;
+        char feature() const;
         friend bool operator == (const str_variation& lhs, const str_variation& rhs);
         friend class str_collection;
     };
@@ -86,6 +91,7 @@ namespace tkbio {
         int size() const { return _reads.size(); }
         vector<str_variation> get_variations(int coverage, double heterozygosity) const throw (exception);
         pair<int,int> span() const;
+        int count_coverage(int start, int stop) const;
         static int detect_str(int argc, char** argv) throw (exception);
     };
 }
