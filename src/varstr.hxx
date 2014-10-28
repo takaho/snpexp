@@ -19,13 +19,19 @@ namespace tkbio {
 
     typedef unsigned long long ullong;
 
-    class bamread {
+    class bamread;
+    class str_collection;
+    class str_variation;
 
+    class bamread {
+    public:
         const static ullong FEATURE_MASK             = 0x3000000000000LL;
         const static ullong FEATURE_MATCH            = 0x0000000000000LL;
         const static ullong FEATURE_REPEAT_INSERTION = 0x1000000000000LL; 
         const static ullong FEATURE_REPEAT_DELETION  = 0x2000000000000LL;
+        const static ullong FEATURE_ERROR            = 0x3000000000000LL;
 
+    private:
         vector<unsigned long long> _sections;
 
         int _chromosome;
@@ -45,6 +51,7 @@ namespace tkbio {
         static char get_feature(ullong info);// { return info & FEATURE_MASK; }
         bool covers(int start, int end) const { return start <= _start && end <= _stop; }
         bool shares_variation(ullong section) const;
+        bool has_reference_at(int start, int end) const;
 
         string to_string() const;
         friend class strcollection;
@@ -58,12 +65,14 @@ namespace tkbio {
         int _num_reference;
         int _num_others;
     public:
+        str_variation();
         str_variation(int position, int reference_span, int read_span);
         void set_counts(int share, int reference, int others);
 
         string to_string() const;
-        friend class strcollection;
-        friend ::operator == (const str_variation& lhs, const str_variation& rhs);
+        ullong encode() const;
+        friend bool operator == (const str_variation& lhs, const str_variation& rhs);
+        friend class str_collection;
     };
 
     class str_collection {
@@ -75,7 +84,7 @@ namespace tkbio {
         void sweep(int chromosome, int start=0, int end=-1);
         void add_read(bam1_t const* read);
         int size() const { return _reads.size(); }
-        vector<strvariation> get_variations(int coverage, double heterozygosity) const throw (exception);
+        vector<str_variation> get_variations(int coverage, double heterozygosity) const throw (exception);
         pair<int,int> span() const;
         static int detect_str(int argc, char** argv) throw (exception);
     };

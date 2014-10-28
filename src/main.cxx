@@ -203,7 +203,7 @@ int main(int argc, char** argv) {
 
         if (mode == 4) {
             try {
-                strcollection::detect_str(argc, argv);
+                str_collection::detect_str(argc, argv);
                 return 0;
             } catch (exception& e) {
                 throw;

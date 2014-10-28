@@ -50,17 +50,20 @@ bamread::bamread(bam1_t const* read) {
     uint32_t const* cigar = bam1_cigar(read);
     int clen = read->core.n_cigar;
     ullong position = (ullong)(read->core.pos + 1);
+    bool ends_with_match = false;
     for (int i = 0; i < clen; i++) {
+        ends_with_match = false;
         int op = bam_cigar_op(cigar[i]);
         ullong slen = (ullong)bam_cigar_oplen(cigar[i]);
         ullong info = (slen << 32) | position;
         if (op == BAM_CMATCH || op == BAM_CDIFF || op == BAM_CEQUAL) { // M
             _sections.push_back(FEATURE_MATCH | info);
             position += slen;
-        } else if (op == BAM_CINS) { // I
+            ends_with_match = true;
+        } else if (op == BAM_CINS) { // I, more repeats than reference
             _sections.push_back(FEATURE_REPEAT_INSERTION | info);
             position += slen;
-        } else if (op == BAM_CDEL) { // D
+        } else if (op == BAM_CDEL) { // D, less repeat than reference
             _sections.push_back(FEATURE_REPEAT_DELETION | info);
         } else if (op == BAM_CSOFT_CLIP || op == BAM_CHARD_CLIP) { // S or H
             break;
@@ -71,11 +74,29 @@ bamread::bamread(bam1_t const* read) {
         }
     }
     _stop = position + 1;
+    if (!ends_with_match) {
+        _sections.erase(_sections.begin() + _sections.size() - 1);
+    }
 }
 
 bool bamread::shares_variation(ullong section) const {
     for (vector<ullong>::const_iterator it = _sections.begin(); it != _sections.end(); it++) {
         if (*it == section) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool bamread::has_reference_at(int start, int end) const {
+    for (int i = 0; i < (int)_sections.size(); i++) {
+        ullong section = _sections[i];
+        int position = get_position(section);
+        if (position >= end) {
+            return false;
+        }
+        int span = get_span(section);
+        if (position <= start && end <= position + span) {
             return true;
         }
     }
@@ -107,23 +128,84 @@ string bamread::to_string() const {
     return ss.str();
 }
 
-operator == (const str_variation& lhs, const str_variation& rhs) {
-    if (lhs._position == rhs._position 
-        && lhs._reference_span == rhs._reference_span 
-        && lhs._read_span == rhs._read_span) {
-        return true;
+str_variation::str_variation(int position, int reference_span, int read_span) {
+    _position = position;
+    _reference_span = reference_span;
+    _read_span = read_span;
+    _num_shares = 0;
+    _num_reference = 0;
+    _num_others = 0;
+}
+
+str_variation::str_variation() {
+    _position = 0;
+    _reference_span = 0;
+    _read_span = 0;
+    _num_shares = 0;
+    _num_reference = 0;
+    _num_others = 0;
+}
+
+ullong str_variation::encode() const {
+    ullong pos = _position;
+    ullong span;
+    ullong feature;
+    if (_reference_span > 0 && _read_span == 0) { // less repeats than reference
+        feature = bamread::FEATURE_REPEAT_DELETION;
+        span = ((ullong)_reference_span) << 32;
+    } else if (_reference_span == 0 && _read_span > 0) { // more rpeats than reference
+        feature = bamread::FEATURE_REPEAT_INSERTION;
+        span = ((ullong)_read_span) << 32;
     } else {
-        return false;
+        feature = bamread::FEATURE_ERROR;
+        span = 0;
+    }
+    return pos | span | feature;
+}
+
+void str_variation::set_counts(int share, int reference, int others) {
+    _num_shares = share;
+    _num_reference = reference;
+    _num_others = others;
+}
+
+string str_variation::to_string() const {
+    stringstream ss;
+    ss << _position << ":";
+    if (_reference_span > 0) { // less repeats than reference
+        ss << "D" << _reference_span;
+    } else if (_read_span > 0) { // more rpeats than reference
+        ss << "I" << _read_span;
+    } else {
+        ss << "?";
+    }
+    
+    ss << "\t" << _num_shares << "/" << _num_reference << "/" << _num_others;
+    return ss.str();
+}
+
+//ullong str_variation::encode() const {
+//}
+
+namespace tkbio {
+    bool operator == (const str_variation& lhs, const str_variation& rhs) {
+        if (lhs._position == rhs._position 
+            && lhs._reference_span == rhs._reference_span 
+            && lhs._read_span == rhs._read_span) {
+            return true;
+        } else {
+            return false;
+        }
     }
 }
 
-strcollection::strcollection() {
+str_collection::str_collection() {
 }
 
-strcollection::~strcollection() {
+str_collection::~str_collection() {
 }
 
-void strcollection::sweep(int chromosome, int start, int end) {
+void str_collection::sweep(int chromosome, int start, int end) {
     if (end < 0) { // clear all
         if (chromosome < 0) {
             _reads.erase(_reads.begin(), _reads.end());
@@ -147,11 +229,11 @@ void strcollection::sweep(int chromosome, int start, int end) {
     }
 }
 
-void strcollection::add_read(bam1_t const* read) {
+void str_collection::add_read(bam1_t const* read) {
     _reads.push_back(bamread(read));
 }
 
-pair<int,int> strcollection::span() const {
+pair<int,int> str_collection::span() const {
     int pos_min = numeric_limits<int>::max();
     int pos_max = numeric_limits<int>::min();
     // if (_reads.size() == 0) {
@@ -174,7 +256,8 @@ vector<str_variation> str_collection::get_variations(int coverage, double hetero
             ullong section = _reads[i].get_section(j);
             ullong feature = section & bamread::FEATURE_MASK;
             if (feature != 0) {
-                int span = bamread::get_span(feature);
+                int span = bamread::get_span(section);
+                int position = bamread::get_position(section);
                 if ((feature & bamread::FEATURE_REPEAT_INSERTION) != 0) {
                     alleles.push_back(str_variation(position, span, 0));
                 } else if ((feature & bamread::FEATURE_REPEAT_DELETION) != 0) {
@@ -196,13 +279,47 @@ vector<str_variation> str_collection::get_variations(int coverage, double hetero
             unique.push_back(alleles[i]);
         }
     }
-    for (int i = 0; i < (int)unique.size(); i++) {
-        
+    vector<str_variation> counted;
+    float lower = (float)heterozygosity;
+    float upper;
+    if (lower > 1.0f) {
+        upper = lower;
+        lower = 1.0f / lower;
+    } else {
+        upper = 1.0f / lower;
     }
-    //for (int i = 0; i < 
+    for (int i = 0; i < (int)unique.size(); i++) {
+        int num_identical = 0;
+        int num_reference = 0;
+        int num_others = 0;
+        str_variation& allele = counted[i];
+        int start = allele._position;
+        int stop = allele._position + allele._reference_span;
+        ullong info = allele.encode();
+        for (int j = 0; j < (int)_reads.size(); j++) {
+            const bamread& br = _reads[j];
+            if (!br.covers(start, stop)) continue;
+            if (br.shares_variation(info)) {
+                num_identical++;
+            } else if (br.has_reference_at(start, stop)) {
+                num_reference++;
+            } else {
+                num_others++;
+            }
+        }
+        int total = num_identical + num_reference + num_others;
+        int minimum = (int)(total * lower + .5f);
+        int maximum = (int)(total * upper + .5f);
+        if (total >= coverage && minimum <= num_identical && num_identical <= maximum) {
+            allele.set_counts(num_identical, num_reference, num_others);
+            counted.push_back(allele);
+        }
+    }
+    return counted;
 }
 
-int strcollection::detect_str(int argc, char** argv) throw (exception) {
+
+int str_collection::detect_str(int argc, char** argv) throw (exception) {
     try {
         const char* filename1 = get_argument_string(argc, argv, "1", NULL);
         const char* filename2 = get_argument_string(argc, argv, "2", NULL);
@@ -286,7 +403,7 @@ int strcollection::detect_str(int argc, char** argv) throw (exception) {
                 for (int i = 0; i < num_files; i++) {
                     vector<str_variation> gaps = detectors[i]->get_variations(coverage, heterozygosity);
                     for (int j = 0; j < (int)gaps.size(); j++) {
-                        cout << gaps[j]->to_string() << endl;
+                        cout << gaps[j].to_string() << endl;
                     }
                 }
             }
