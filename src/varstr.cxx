@@ -44,46 +44,45 @@ using tktools::split_items;
 using tktools::bio::convert_chromosome_to_code;
 using tktools::bio::convert_code_to_chromosome;
 
-namespace {
-    string resolve_cigar(const bam1_t* read) {
-        const uint32_t* cigar = bam1_cigar(read);
-        int len = read->core.n_cigar;
-        stringstream ss;
-        for (int i = 0; i < len; i++) {
-            int op = bam_cigar_op(cigar[i]);
-            int slen = bam_cigar_oplen(cigar[i]);
-            ss << slen;
-            if (op == BAM_CMATCH) {
-                ss << 'M';
-            } else if (op == BAM_CINS) {
-                ss << 'I';
-            } else if (op == BAM_CDEL) {
-                ss << 'D';
-            } else if (op == BAM_CREF_SKIP) {
-                ss << 'N';
-            } else if (op == BAM_CSOFT_CLIP) {
-                ss << 'S';
-            } else if (op == BAM_CHARD_CLIP) {
-                ss << 'H';
-            } else if (op == BAM_CPAD) {
-                ss << 'P';
-            } else if (op == BAM_CEQUAL) {
-                ss << 'M';
-            } else if (op == BAM_CDIFF) {
-                ss << 'X';
-            } else if (op == BAM_CBACK) {
-                break;
-            }
-        }
-        return ss.str();
-    }
-}
+// namespace {
+//     string resolve_cigar(const bam1_t* read) {
+//         const uint32_t* cigar = bam1_cigar(read);
+//         int len = read->core.n_cigar;
+//         stringstream ss;
+//         for (int i = 0; i < len; i++) {
+//             int op = bam_cigar_op(cigar[i]);
+//             int slen = bam_cigar_oplen(cigar[i]);
+//             ss << slen;
+//             if (op == BAM_CMATCH) {
+//                 ss << 'M';
+//             } else if (op == BAM_CINS) {
+//                 ss << 'I';
+//             } else if (op == BAM_CDEL) {
+//                 ss << 'D';
+//             } else if (op == BAM_CREF_SKIP) {
+//                 ss << 'N';
+//             } else if (op == BAM_CSOFT_CLIP) {
+//                 ss << 'S';
+//             } else if (op == BAM_CHARD_CLIP) {
+//                 ss << 'H';
+//             } else if (op == BAM_CPAD) {
+//                 ss << 'P';
+//             } else if (op == BAM_CEQUAL) {
+//                 ss << 'M';
+//             } else if (op == BAM_CDIFF) {
+//                 ss << 'X';
+//             } else if (op == BAM_CBACK) {
+//                 break;
+//             }
+//         }
+//         return ss.str();
+//     }
+// }
 
 bamread::bamread(bam1_t const* read) {
     _chromosome = read->core.tid;
     _start = read->core.pos;
     uint32_t const* cigar = bam1_cigar(read);
-    //cerr << resolve_cigar(read) << endl;
     int clen = read->core.n_cigar;
     if (clen == 0) {
         return;
@@ -190,9 +189,6 @@ str_variation::str_variation(int position, int reference_span, int read_span) {
         feature = bamread::FEATURE_ERROR;
     }
     _code = feature | (ullong)position;
-    //_position = position;
-    //_reference_span = reference_span;
-    //_read_span = read_span;
     _num_shares = 0;
     _num_reference = 0;
     _num_others = 0;
@@ -200,9 +196,6 @@ str_variation::str_variation(int position, int reference_span, int read_span) {
 
 str_variation::str_variation() {
     _code = bamread::FEATURE_ERROR;
-    //_position = 0;
-    //_reference_span = 0;
-    //_read_span = 0;
     _num_shares = 0;
     _num_reference = 0;
     _num_others = 0;
@@ -216,7 +209,6 @@ char str_variation::feature() const {
         return 'I';
     case bamread::FEATURE_REPEAT_DELETION:
         return 'D';
-//    case bamread::FEATURE_ERROR:
     default:
         return '?';
     }
@@ -227,14 +219,6 @@ int str_variation::position() const {
 }
 
 int str_variation::read_span() const {
-    if ((_code & bamread::FEATURE_MASK) == bamread::FEATURE_REPEAT_DELETION) {
-        return (int)(_code >> 32) & 0xffff;
-    } else {
-        return 0;
-    }
-}
-
-int str_variation::reference_span() const {
     if ((_code & bamread::FEATURE_MASK) == bamread::FEATURE_REPEAT_INSERTION) {
         return (int)(_code >> 32) & 0xffff;
     } else {
@@ -242,22 +226,13 @@ int str_variation::reference_span() const {
     }
 }
 
-// ullong str_variation::encode() const {
-//     ullong pos = _position;
-//     ullong span;
-//     ullong feature;
-//     if (_reference_span > 0 && _read_span == 0) { // less repeats than reference
-//         feature = bamread::FEATURE_REPEAT_DELETION;
-//         span = ((ullong)_reference_span) << 32;
-//     } else if (_reference_span == 0 && _read_span > 0) { // more rpeats than reference
-//         feature = bamread::FEATURE_REPEAT_INSERTION;
-//         span = ((ullong)_read_span) << 32;
-//     } else {
-//         feature = bamread::FEATURE_ERROR;
-//         span = 0;
-//     }
-//     return pos | span | feature;
-// }
+int str_variation::reference_span() const {
+    if ((_code & bamread::FEATURE_MASK) == bamread::FEATURE_REPEAT_DELETION) {
+        return (int)(_code >> 32) & 0xffff;
+    } else {
+        return 0;
+    }
+}
 
 void str_variation::set_counts(int share, int reference, int others) {
     _num_shares = share;
@@ -268,32 +243,14 @@ void str_variation::set_counts(int share, int reference, int others) {
 string str_variation::to_string() const {
     stringstream ss;
     ss << position() << ":" << feature() << ":" << (reference_span() > 0 ? reference_span() : read_span());
-    // if (_reference_span > 0) { // less repeats than reference
-    //     ss << "D" << _reference_span;
-    // } else if (_read_span > 0) { // more rpeats than reference
-    //     ss << "I" << _read_span;
-    // } else {
-    //     ss << "?";
-    // }
     ss << "\t" << _num_shares << "/" << _num_reference << "/" << _num_others;
     return ss.str();
 }
-
-//ullong str_variation::encode() const {
-//}
 
 namespace tkbio {
     bool operator == (const str_variation& lhs, const str_variation& rhs) {
         return lhs._code == rhs._code;
     }
-    //     if (lhs._position == rhs._position 
-    //         && lhs._reference_span == rhs._reference_span 
-    //         && lhs._read_span == rhs._read_span) {
-    //         return true;
-    //     } else {
-    //         return false;
-    //     }
-    // }
 }
 
 str_collection::str_collection() {
@@ -363,17 +320,11 @@ vector<str_variation> str_collection::get_variations(int coverage, double hetero
             if (feature != 0) {
                 int span = bamread::get_span(section);
                 if (span < 4) continue;
-                alleles.push_back(str_variation(section));//position, span, 0));
-                // int position = bamread::get_position(section);
-                // if ((feature & bamread::FEATURE_REPEAT_INSERTION) != 0) {
-                //     alleles.push_back(str_variation(section));//position, span, 0));
-                // } else if ((feature & bamread::FEATURE_REPEAT_DELETION) != 0) {
-                //     alleles.push_back(str_variation(position, 0, span));
-                // }
+                alleles.push_back(str_variation(section));
             }
         }
     }
-    //cerr << alleles.size() << " variations detected\n";
+
     vector<str_variation> unique;
     for (int i = 0; i < (int)alleles.size(); i++) {
         bool overlap = false;
@@ -384,11 +335,10 @@ vector<str_variation> str_collection::get_variations(int coverage, double hetero
             }
         }
         if (!overlap) {
-            //cout << alleles[i].to_string() << endl;
             unique.push_back(alleles[i]);
         }
     }
-    //cerr << unique.size() << " were unique\n";
+
     vector<str_variation> counted;
     float lower = (float)heterozygosity;
     float upper;
@@ -410,8 +360,7 @@ vector<str_variation> str_collection::get_variations(int coverage, double hetero
         str_variation& allele = unique[i];
         int start = allele.position();
         int stop = allele.position() + allele.reference_span();
-        ullong info = allele.code();//encode();
-        //cout << hex << info << dec << "\t";
+        ullong info = allele.code();
         for (int j = 0; j < (int)_reads.size(); j++) {
             const bamread& br = _reads[j];
             if (!br.covers(start, stop)) continue;
@@ -441,11 +390,13 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
     try {
         const char* filename1 = get_argument_string(argc, argv, "1", "/mnt/smb/tae/stap/shira/BAM6/Sample6.bam");
         const char* filename2 = get_argument_string(argc, argv, "2", "/mnt/smb/tae/stap/shira/BAM12/Sample12.bam");
+        const char* filename_output = get_argument_string(argc, argv, "o", NULL);
         int coverage = get_argument_integer(argc, argv, "c", 20);
         double heterozygosity = get_argument_float(argc, argv, "z", 0.5);
         int chunk_size = get_argument_integer(argc, argv, "w", 2000);
         int margin_size = get_argument_integer(argc, argv, "m", 500);
         int num_files = 2;
+        int maximum_reads_in_window = get_argument_integer(argc, argv, "x", 0);
         bool verbose = has_option(argc, argv, "verbose");
 
         if (verbose) {
@@ -455,16 +406,27 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
             cerr << "coverage   : " << coverage << endl;
             cerr << "chunk size : " << chunk_size << endl;
             cerr << "margin     : " << margin_size << endl;
+            cerr << "max reads  : " << maximum_reads_in_window << endl;
+            cerr << "output     : " << (filename_output == NULL ? "stdout" : filename_output) << endl;
         }
 
+        ostream* ost = &cout;
         str_collection** detectors = new str_collection*[num_files];
         bamFile* bamfiles = new bamFile[num_files];
         bam_header_t** headers = new bam_header_t*[num_files];
         bam1_t** reads = new bam1_t*[num_files];
 
-        if (verbose) {
-            cerr << "opening files\n";
+        if (filename_output != NULL) {
+            ofstream* fo = new ofstream(filename_output);
+            if (fo->is_open() == false) {
+                throw invalid_argument("cannot open output file");
+            }
+            ost = fo;
         }
+
+        // if (verbose) {
+        //     cerr << "opening files\n";
+        // }
         bamfiles[0] = bam_open(filename1, "rb");
         bamfiles[1] = bam_open(filename2, "rb");
         for (int i = 0; i < num_files; i++) {
@@ -473,9 +435,9 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
             detectors[i] = new str_collection();
         }
 
-        if (verbose) {
-            cerr << "check integrity\n";
-        }
+        // if (verbose) {
+        //     cerr << "check integrity\n";
+        // }
         if (check_header_consistency(num_files, headers) == false) {
             throw runtime_error("incompatible bam files");
         }
@@ -484,10 +446,8 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
         int next_chromosome = -1;
         int position = 0;
         int next_position = position + chunk_size;
-        
-        if (verbose) {
-            cerr << "analyzing\n";
-        }
+        int steps = 0;
+//        bool debug = false;
         for (;;) {
             bool chromosome_change = false;
             bool finished = false;
@@ -496,13 +456,20 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
                 for (;;) {
                     if (bam_read1(bamfiles[i], reads[i]) > 0) {
                         bam1_t const* r = reads[i];
-                        detectors[i]->add_read(r);
-                        if (r->core.tid != current_chromosome) {
+                        if (maximum_reads_in_window <= 0 || detectors[i]->size() < maximum_reads_in_window) {
+                            detectors[i]->add_read(r);
+                        }
+                        int chrm = r->core.tid;
+                        int pos = r->core.pos;
+
+                        if (chrm != current_chromosome) {
                             chromosome_change = true;
-                            next_chromosome = r->core.tid;
+                            if (next_chromosome <= 0) {
+                                next_chromosome = chrm;
+                            }
                             break;
                         }
-                        if (r->core.pos > next_position) {
+                        if (pos > next_position) {
                             break;
                         }
                     } else {
@@ -513,12 +480,18 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
                 }
             }
 
+            // detect gaps and insertions
             if (current_chromosome >= 0) {
-                //cout << current_chromosome << ":" << position << "-" << next_position << "\t";
-                // for (int i = 0; i < num_files; i++) {
-                //     cout << "\t" << i << ":" << detectors[i]->size();
-                // }
-                // cout << endl;
+                if (verbose) {
+                    if (++steps % 1000 == 0) {
+                        cerr << " " << headers[0]->target_name[current_chromosome] << ":" << position << "-" << next_position << " ";
+                        //cerr << current_chromosome << ":" << position << "-" << next_position << " ";
+                        for (int i = 0; i < num_files; i++) {
+                            cerr << " " << i << ":" << detectors[i]->size();
+                        }
+                        cerr << "     \r";
+                    }
+                }
                 vector<vector<str_variation> > detected;
                 for (int i = 0; i < num_files; i++) {
                     vector<str_variation> gaps = detectors[i]->get_variations(coverage / 2, heterozygosity);
@@ -527,24 +500,30 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
                     //     cout << gaps[j].to_string() << endl;
                     // }
                 }
+                // if (position + chunk_size > 68444170 && position < 68444200) {
+                //     debug = true;
+                // }
                 for (int i = 0; i < num_files; i++) {
                     vector<str_variation>& vi = detected[i];
                     for (int k = 0; k < (int)vi.size(); k++) {
                         str_variation& ak = vi[k];
                         int c = ak.coverage();
                         int o = ak.occurrence();
-                        if (c < coverage || o < c / 2 || o > c * 2) {
+                        if (c < coverage || o < c / 4 || o > c * 4) {
                             continue;
                         }
-                        //cout << "test " << i << "," << k << ":" << ak.to_string() << "\t";
+                        // if (debug) {
+                        //     cerr << "test " << i << "," << k << ":" << ak.to_string() << "\t";
+                        // }
                         bool flag_shared = false;
                         for (int j = 0; j < num_files; j++) {
                             if (i == j) continue;
                             vector<str_variation>& vj = detected[j];
-                        //for (int k = 0; k < (int)vi.size(); k++) {
                             for (int l = 0; l < (int)vj.size(); l++) {
                                 if (ak == vj[l]) {
-                                    //cout << " <= " << j << "," << l << ":" << vj[l].to_string() << endl;
+                                    // if (debug) {
+                                    //     cerr << " rejected by " << j << "," << l << ":" << vj[l].to_string() << endl;
+                                    // }
                                     flag_shared = true;
                                     ak.set_counts(0,0,0);
                                     vj[l].set_counts(0,0,0);
@@ -552,6 +531,7 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
                                 }
                             }
                             if (flag_shared) {
+                                //cerr << " accepted   \n";
                                 break;
                             }
                         }
@@ -560,12 +540,13 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
                             for (int j = 0; j < num_files; j++) {
                                 if (i == j) continue;
                                 if (detectors[j]->count_coverage(ak.position(), ak.position() + ak.reference_span()) >= coverage) {
-                                    cout << headers[i]->target_name[current_chromosome] 
+                                    *ost << headers[i]->target_name[current_chromosome] 
                                          << "\t" << ak.position() 
                                          << "\t" << (ak.position() + ak.reference_span())
-                                         << "\t" << ak.read_span() << "\t" << i
-                                         << "\t" << ak.occurrence() << "/" << ak.opposite() << endl;
-                                    //cout << "SPECIFIC " << i << ":" << ak.to_string() << endl;
+                                         << "\t" << ak.read_span() 
+                                         << "\t" << ak.reference_span()
+                                         << "\t" << ak.occurrence() << "/" << ak.opposite() 
+                                         << flush << endl;
                                 }
                             }
                         }
@@ -573,34 +554,43 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
                 }
             }
 
-            // for (int i = 0; i < num_files; i++) {
-            //     strcollection* detector = detectors[i];
-            // }
-            // vector<strlocus> alleles = strcollection::get_variations(num_files, detectors, coverage, heterozygosity);
-            // for (int i = 0; i < (int)alleles.size(); i++) {
-            // }
-
             if (finished) {
                 break;
             }
 
             if (chromosome_change) {
                 int pos_min = numeric_limits<int>::max();
-                for (int i = 0; i < num_files; i++) {
-                    detectors[i]->sweep(current_chromosome);
-                    if (!finished) {
-                        if (reads[i]->core.pos < pos_min) {
-                            pos_min = reads[i]->core.pos;
-                        }
-                        detectors[i]->add_read(reads[i]);
+                if (verbose) {
+                    int total_reads = 0;
+                    for (int i = 0; i < num_files; i++) {
+                        total_reads += detectors[i]->size();
                     }
+                    cerr << "change chromosome to " << headers[0]->target_name[next_chromosome] << ", sweep " << total_reads << "reads from " << position << "\r";
                 }
-                current_chromosome = next_chromosome;
-                position = pos_min;
-                next_position = position + chunk_size;
-            } else {
+                if (!finished) {
+                    for (int i = 0; i < num_files; i++) {
+                        detectors[i]->sweep(current_chromosome);
+                        pair<int,int> region = detectors[i]->span();
+                        pos_min = pos_min < region.first ? pos_min : region.first;
+                    }
+                    //     if (reads[i]->core.pos < pos_min) {
+                    //         pos_min = reads[i]->core.pos;
+                    //     }
+                    //     detectors[i]->add_read(reads[i]);
+                    // }
+                    if (pos_min == numeric_limits<int>::max()) {
+                        pos_min = 0;
+                    }
+                    current_chromosome = next_chromosome;
+                    next_chromosome = -1;
+                    position = pos_min;
+                    next_position = position + chunk_size;
+                } else {
+                    break;
+                }
+            } else { // next position
                 for (int i = 0; i < num_files; i++) {
-                    detectors[i]->sweep(current_chromosome, 0, next_position - margin_size);
+                    detectors[i]->sweep(current_chromosome, 0, next_position);// - margin_size);
                 }
                 int pos_min = numeric_limits<int>::max();
                 for (int i = 0; i < num_files; i++) {
@@ -610,7 +600,9 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
                     }
                     detectors[i]->sweep(current_chromosome);
                 }
-                if (pos_min > next_position) {
+                if (pos_min == numeric_limits<int>::max()) {
+                    pos_min = next_position;
+                } else if (pos_min > next_position) {
                     next_position = pos_min;
                 }
                 position = next_position;
@@ -618,11 +610,19 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
             }
         }
 
+        if (filename_output != NULL) {
+            dynamic_cast<ofstream*>(ost)->close();
+            delete ost;
+            ost = &cout;
+        }
+
         for (int i = 0; i < num_files; i++) {
             bam_destroy1(reads[i]);
             bam_header_destroy(headers[i]);
             bam_close(bamfiles[i]);
+            delete detectors[i];
         }
+        delete[] detectors;
         delete[] reads;
         delete[] headers;
         delete[] bamfiles;
