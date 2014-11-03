@@ -962,3 +962,26 @@ bool tkbio::check_header_consistency(int num, bam_header_t** headers) {
     }
     return true;
 }
+
+map<int,chromosome_seq const*> tkbio::chromosome_seq::map_chromosome(bam_header_t const* header, const vector<chromosome_seq*>& chromosomes) throw (exception) {
+    map<int,chromosome_seq const*> converter;
+    for (int i = 0; i < header->n_targets; i++) {
+        chromosome_seq const* chrm = NULL;
+        const char* name = header->target_name[i];
+        if (strncmp(name, "chr", 3) == 0) {
+            name += 3;
+        }
+        for (int j = 0; j < (int)chromosomes.size(); j++) {
+            const char* nc = chromosomes[j]->name().c_str();
+            if (strncmp(nc, "chr", 3) == 0) {
+                nc += 3;
+            }
+            if (strcmp(name, nc) == 0) {
+                chrm = chromosomes[j];
+                break;
+            }
+        }
+        converter[i] = chrm;
+    }
+    return converter;
+}

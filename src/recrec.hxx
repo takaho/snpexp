@@ -5,6 +5,7 @@
 #include <bam.h>
 #include <iosfwd>
 #include <set>
+#include <map>
 
 //using namespace std;
 using std::set;
@@ -15,11 +16,12 @@ using std::pair;
 using std::exception;
 using std::invalid_argument;
 using std::runtime_error;
+using std::map;
 
 typedef unsigned int uint;
 namespace tkbio {
     class recfragment;
-  class dbsnp_locus;
+    class dbsnp_locus;
 
     //// Chromosome
     class chromosome_seq {
@@ -73,6 +75,7 @@ namespace tkbio {
         }
         static int get_chromosome_code(int length, const char* line);
         static vector<chromosome_seq*> load_genome(const char* filename) throw (exception);
+        static map<int,chromosome_seq const*> map_chromosome(bam_header_t const* header, const vector<chromosome_seq*>& chromosomes) throw (exception);
     };
 
   class dbsnp_locus;

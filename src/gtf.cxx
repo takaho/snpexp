@@ -359,9 +359,13 @@ namespace {
 
 vector<const gtfgene*> gtffile::find_genes(const string& chromosome, int start, int end) const {
     int ccode = convert_chromosome_to_code(chromosome.c_str());
-    vector<const gtfgene*> selected;
+    return find_genes(ccode, start, end);
+}
 
+vector<const gtfgene*> gtffile::find_genes(int ccode, int start, int end) const {
+    vector<const gtfgene*> selected;
     if (ccode < 0) {
+        vector<const gtfgene*> selected;
         return selected;
     }
 

@@ -129,6 +129,7 @@ namespace tkbio {
         vector<gtfgene*> get_genes() const;
         vector<string> get_symbols() const;
         vector<const gtfgene*> find_genes(const string& chromosome, int start, int end=-1) const;
+        vector<const gtfgene*> find_genes(int chromosome, int start, int end) const;
         bool contains_in_exon(const string& chromosome, int location) const;
         bool contains_in_exon_debug(const string& chromosome, int location) const;
         vector<pair<int,int> > get_exonregion(const string& chromosome, bool utr=true) const;

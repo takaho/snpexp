@@ -201,6 +201,14 @@ int main(int argc, char** argv) {
              mode = 4;
         }
 
+        if (mode == 5) {
+            try {
+                denovo_snp::enumerate_hetero(argc, argv);
+            } catch (exception& e) {
+                throw;
+            }
+        }
+
         if (mode == 4) {
             try {
                 str_collection::detect_str(argc, argv);

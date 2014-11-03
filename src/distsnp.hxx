@@ -9,6 +9,7 @@ using std::string;
 using std::exception;
 using std::invalid_argument;
 using std::runtime_error;
+using std::out_of_range;
 
 namespace tkbio {
     class dbsnp_file;
@@ -109,6 +110,51 @@ namespace tkbio {
   public:
     static void main(int argc, char** argv) throw (exception);
   };
+
+    class gtffile;
+    class denovo_snp;
+
+    class polymorphic_allele {
+        int _chromosome;
+        int _position;
+        int _bases[8];
+        static polymorphic_allele NO_DATA;
+    public:
+        polymorphic_allele(int chromosome, int position);
+        void set_bases(int slot, int a, int c, int g, int t) throw (out_of_range);
+        int position() const { return _position; }
+        void get_bases(int slot, int*& bases) const throw (out_of_range);
+        int chromosome() const { return _chromosome; }
+        int coverage(int slot) const throw (out_of_range);
+        string to_string() const;
+        float frequency(int slot) const throw (out_of_range);
+        friend class denovo_snp;
+        friend bool operator == (const polymorphic_allele& lhs, const polymorphic_allele& rhs);
+    };
+
+    class denovo_snp {
+        //const gtffile* genes;
+        int _chromosome;
+        int _start;
+        int _stop;
+        int _size;
+        int* _position;
+        int** _count1;
+        int** _count2;
+    private:
+        void initialize_buffer(const gtffile* gtf, int chromosome, int start, int end);
+        void set_read(bam1_t const* read);
+        int get_index(int position) const;
+    public:
+        denovo_snp(const gtffile* gtf, int chromosome, int start, int end);
+        ~denovo_snp();
+        void add(bam1_t const* read);
+        polymorphic_allele get_allele(int position) const;
+        vector<polymorphic_allele> get_polymorphism(int coverage, double heterogeneity) const;
+        //void add(in position, );
+        //void clear();
+        static void enumerate_hetero(int argc, char** argv) throw (exception);
+    };
 }
 
 #endif

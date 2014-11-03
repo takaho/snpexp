@@ -19,6 +19,8 @@
 #include <recrec.hxx>
 #include <tktools.hxx>
 #include <distsnp.hxx>
+#include <gtf.hxx>
+
 using std::string;
 using std::vector;
 using std::map;
@@ -841,4 +843,391 @@ void snp_distance::main(int argc, char** argv) throw (exception) {
     display_snp_distances(dbsnp, chromosome, start, start + window_size, genotypes, *ost);
 
     delete dbsnp;
+}
+
+void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
+    try {
+        const char* filename1 = get_argument_string(argc, argv, "1", "/mnt/smb/tae/stap/shira/BAM6/Sample6.bam");
+        const char* filename2 = get_argument_string(argc, argv, "2", "/mnt/smb/tae/stap/shira/BAM12/Sample12.bam");
+        const char* filename_output = get_argument_string(argc, argv, "o", NULL);
+        const char* filename_gtf = get_argument_string(argc, argv, "G", NULL);
+        const char* filename_chrm = get_argument_string(argc, argv, "s", NULL);
+        int coverage = get_argument_integer(argc, argv, "c", 20);
+        double heterozygosity = get_argument_float(argc, argv, "z", 0.5);
+        int chunk_size = get_argument_integer(argc, argv, "w",  200000);
+        int margin_size = get_argument_integer(argc, argv, "m", 100000);
+        int num_files = 2;
+        int maximum_reads_in_window = get_argument_integer(argc, argv, "x", 0);
+        bool verbose = has_option(argc, argv, "verbose");
+
+        if (verbose) {
+            cerr << "filename 1 : " << filename1 << endl;
+            cerr << "filename 2 : " << filename2 << endl;
+            cerr << "gtf        : " << filename_gtf << endl;
+            cerr << "heterozygosity : " << heterozygosity << endl;
+            cerr << "coverage   : " << coverage << endl;
+            cerr << "chunk size : " << chunk_size << endl;
+            cerr << "margin     : " << margin_size << endl;
+            cerr << "max reads  : " << maximum_reads_in_window << endl;
+            cerr << "output     : " << (filename_output == NULL ? "stdout" : filename_output) << endl;
+        }
+
+        gtffile* gtf = gtffile::load_gtf(filename_gtf);
+        ostream* ost = &cout;
+        bamFile* bamfiles = new bamFile[num_files];
+        bam_header_t** headers = new bam_header_t*[num_files];
+        bam1_t** reads = new bam1_t*[num_files];
+
+        if (filename_output != NULL) {
+            ofstream* fo = new ofstream(filename_output);
+            if (fo->is_open() == false) {
+                throw invalid_argument("cannot open output file");
+            }
+            ost = fo;
+        }
+
+        // if (verbose) {
+        //     cerr << "opening files\n";
+        // }
+        bamfiles[0] = bam_open(filename1, "rb");
+        bamfiles[1] = bam_open(filename2, "rb");
+        for (int i = 0; i < num_files; i++) {
+            headers[i] = bam_header_read(bamfiles[i]);
+            reads[i] = bam_init1();
+        }
+
+        // if (verbose) {
+        //     cerr << "check integrity\n";
+        // }
+        if (check_header_consistency(num_files, headers) == false) {
+            throw runtime_error("incompatible bam files");
+        }
+
+        int current_chromosome = -1;
+        int next_chromosome = -1;
+        int position = 0;
+        int next_position = position + chunk_size;
+        int steps = 0;
+        vector<chromosome_seq*> chromosomes = chromosome_seq::load_genome(filename_chrm);
+        map<int,chromosome_seq const*> bam2chrm = chromosome_seq::map_chromosome(headers[0], chromosomes);
+        
+//        bool debug = false;
+        for (;;) {
+            bool chromosome_change = false;
+            bool finished = false;
+            for (int i = 0; i < num_files; i++) {
+                //cerr << i << endl;
+                for (;;) {
+                    if (bam_read1(bamfiles[i], reads[i]) > 0) {
+                        bam1_t const* r = reads[i];
+                        if (maximum_reads_in_window <= 0) {// || detectors[i]->size() < maximum_reads_in_window) {
+                            //detectors[i]->add_read(r);
+                            // int len = read->core.n_cigar;
+                            // const uint8_t* sequence = bam1_seq(read);
+                            // int offset = 4;
+                            // for (int j = 0; j < len; j++) {
+                            //     uint8_t base = (sequence[(j+seqpos) >> 1] >> offset) & 15;
+                            //     offset = 4 - offset;
+                            //     switch (base) {
+                            //     case 15: break; // N
+                            //     case 1: _a[pos + j] ++; ; break;
+                            //     case 2: _c[pos + j] ++; ; break;
+                            //     case 4: _g[pos + j] ++; ; break;
+                            //     case 8: _t[pos + j] ++; ; break;
+                            //     }
+                            // }
+                        }
+
+                        int chrm = r->core.tid;
+                        int pos = r->core.pos;
+
+                        if (chrm != current_chromosome) {
+                            chromosome_change = true;
+                            if (next_chromosome <= 0) {
+                                next_chromosome = chrm;
+                            }
+                            break;
+                        }
+                        if (pos > next_position) {
+                            break;
+                        }
+                    } else {
+                        finished = true;
+                        chromosome_change = false;
+                        break;
+                    }
+                }
+            }
+
+            // detect gaps and insertions
+            if (current_chromosome >= 0) {
+                if (verbose) {
+                    if (++steps % 1000 == 0) {
+                        cerr << " " << headers[0]->target_name[current_chromosome] << ":" << position << "-" << next_position << " ";
+                        //cerr << current_chromosome << ":" << position << "-" << next_position << " ";
+                        for (int i = 0; i < num_files; i++) {
+                            cerr << " " << i << ":";// << ;//detectors[i]->size();
+                        }
+                        cerr << "     \r";
+                    }
+                }
+            }
+
+            if (finished) {
+                break;
+            }
+
+            if (chromosome_change) {
+                int pos_min = numeric_limits<int>::max();
+                if (verbose) {
+                    int total_reads = 0;
+                    for (int i = 0; i < num_files; i++) {
+                        //total_reads += detectors[i]->size();
+                    }
+                    cerr << "change chromosome to " << headers[0]->target_name[next_chromosome] << ", sweep " << total_reads << "reads from " << position << "\r";
+                }
+                if (!finished) {
+                    for (int i = 0; i < num_files; i++) {
+                        //detectors[i]->sweep(current_chromosome);
+                        pair<int,int> region;// = detectors[i]->span();
+                        pos_min = pos_min < region.first ? pos_min : region.first;
+                    }
+                    if (pos_min == numeric_limits<int>::max()) {
+                        pos_min = 0;
+                    }
+                    current_chromosome = next_chromosome;
+                    next_chromosome = -1;
+                    position = pos_min;
+                    next_position = position + chunk_size;
+                } else {
+                    break;
+                }
+            } else { // next position
+                for (int i = 0; i < num_files; i++) {
+                    //detectors[i]->sweep(current_chromosome, 0, next_position);// - margin_size);
+                }
+                int pos_min = numeric_limits<int>::max();
+                for (int i = 0; i < num_files; i++) {
+                    pair<int,int> span;// = detectors[i]->span();
+                    if (span.second > 0 && pos_min > span.first) {
+                        pos_min = span.first;
+                    }
+                    //detectors[i]->sweep(current_chromosome);
+                }
+                if (pos_min == numeric_limits<int>::max()) {
+                    pos_min = next_position;
+                } else if (pos_min > next_position) {
+                    next_position = pos_min;
+                }
+                position = next_position;
+                next_position = position + chunk_size;
+            }
+        }
+
+        if (filename_output != NULL) {
+            dynamic_cast<ofstream*>(ost)->close();
+            delete ost;
+            ost = &cout;
+        }
+
+        for (int i = 0; i < num_files; i++) {
+            bam_destroy1(reads[i]);
+            bam_header_destroy(headers[i]);
+            bam_close(bamfiles[i]);
+            //delete detectors[i];
+        }
+        //delete[] detectors;
+        delete[] reads;
+        delete[] headers;
+        delete[] bamfiles;
+        delete gtf;
+        //return 0;
+
+    } catch (exception& e) {
+        throw;
+    }
+}
+
+polymorphic_allele::polymorphic_allele(int chromosome, int position) {
+    _chromosome = chromosome;
+    _position = position;
+    for (int i = 0; i < 8; i++) _bases[i] = 0;
+}
+
+void polymorphic_allele::set_bases(int slot, int a, int c, int g, int t) throw (out_of_range) {
+    if (slot == 0) {
+        _bases[0] = a; 
+        _bases[1] = c; 
+        _bases[2] = g; 
+        _bases[3] = t; 
+    } else if (slot == 1) {
+        _bases[4] = a; 
+        _bases[5] = c; 
+        _bases[6] = g; 
+        _bases[7] = t; 
+    } else {
+        throw out_of_range("slot must be 0 or 1");
+    }
+}
+
+void polymorphic_allele::get_bases(int slot, int*& counts) const throw (out_of_range) {
+    if (slot == 0) {
+        for (int i = 0; i < 4; i++) counts[i] = _bases[i];
+    } else if (slot == 1) {
+        for (int i = 0; i < 4; i++) counts[i] = _bases[i + 4];
+    } else {
+        throw out_of_range("slot must be 0 or 1");
+    }
+}
+
+string polymorphic_allele::to_string() const {
+    stringstream ss;
+    return ss.str();
+}
+
+namespace tkbio {
+    bool operator == (const polymorphic_allele& lhs, const polymorphic_allele& rhs) {
+        return lhs._chromosome == rhs._chromosome && lhs._position == rhs._position;
+    }
+}
+
+float polymorphic_allele::frequency(int slot) const throw (out_of_range) {
+    int index;
+    if (slot == 0) {
+        index = 0;
+    } else if (slot == 1) {
+        index = 4;
+    } else {
+        throw out_of_range("slot must be 0 or 1");
+    }
+    int max_index = index;
+    int max = _bases[index];
+    int second_index = -1;
+    int second = 0;
+    for (int i = 1; i < 3; i++) {
+        int cnt = _bases[i + index];
+        if (cnt > second) {
+            if (cnt > max) {
+                second = max;
+                second_index = max_index;
+                max = cnt;
+                max_index = i + index;
+            } else {
+                second = cnt;
+                second_index = i + index;
+            }
+        }
+    }
+    if (second_index < 0) { // monomorphic
+        return 0.0f;
+    }
+    int total = max + second;
+    if (total == 0) {
+        return 0.0f;
+    }
+    return (float)second / (total);
+}
+
+int polymorphic_allele::coverage(int slot) const throw (out_of_range) {
+    if (slot == 0) {
+        return _bases[0] + _bases[1] + _bases[2] + _bases[3];
+    } else if (slot == 1) {
+        return _bases[4] + _bases[5] + _bases[6] + _bases[7];
+    } else {
+        throw out_of_range("slot must be 0 or 1");
+    }
+}
+
+polymorphic_allele polymorphic_allele::NO_DATA(-1,-1);
+
+denovo_snp::denovo_snp(const gtffile* gtf, int chromosome, int start, int end) {
+    _size = 0;
+    _position = NULL;
+    _count1 = _count2 = NULL;
+    initialize_buffer(gtf, chromosome, start, end);
+}
+
+denovo_snp::~denovo_snp() {
+    for (int i = 0; i < _size; i++) {
+        delete[] _count1[i];
+        delete[] _count2[i];
+    }
+    delete[] _count1;
+    delete[] _count2;
+    delete[] _position;
+}
+
+int denovo_snp::get_index(int position) const {
+    int left = 0;
+    int right = _size;
+    for (;;) {
+        if (left == right) {
+            return -1;
+        }
+        int center = (left + right) >> 1;
+        int p = _position[center];
+        if (p < position) {
+            left = center + 1;
+        } else if (p > position) {
+            right = center;
+        } else {
+            return center;
+        }
+    }
+}
+
+polymorphic_allele denovo_snp::get_allele(int position) const {
+    int index = get_index(position);
+    if (index < 0) {
+        return polymorphic_allele::NO_DATA;
+    }
+    polymorphic_allele pa(_chromosome, position);
+    int const* locus1 = _count1[index];
+    int const* locus2 = _count2[index];
+    pa.set_bases(0, locus1[0], locus1[1], locus1[2], locus1[3]);
+    pa.set_bases(1, locus2[4], locus2[5], locus2[6], locus2[7]);
+    return pa;
+}
+
+void denovo_snp::initialize_buffer(const gtffile* gtf, int chromosome, int start, int end) {
+    int* posbuffer = new int[end - start];
+    for (int i = 0, span = end - start; i < span; i++) {
+        posbuffer[i] = 0;
+    }
+    vector<const gtfgene*> genes = gtf->find_genes(_chromosome, start, end);
+    for (int i = 0; i < (int)genes.size(); i++) {
+        const vector<gtfexon>& exons = genes[i]->exons();
+        for (int j = 0; j < (int)exons.size(); j++) {
+            int p5 = exons[j].position5();
+            int p3 = exons[j].position3();
+            for (int p = p5; p <= p3; p++) {
+                posbuffer[p - start] = 1;
+            }
+        }
+    }
+    // count 
+    int length = 0;
+    for (int i = 0, span = end - start; i < span; i++) {
+        if (posbuffer[i] != 0) {
+            length++;
+        }
+    }
+    _size = length;
+    _position = new int[length];
+    _count1 = new int*[length];
+    _count2 = new int*[length];
+    for (int i = 0, span = end - start, index = 0; i < span; i++) {
+        if (posbuffer[i] != 0) {
+            _position[index] = i + start;
+            _count1[index] = new int[4];
+            _count2[index] = new int[4];
+            for (int j = 0; j < 4; j++) {
+                _count1[j] = _count2[j] = 0;
+            }
+        }
+    }
+}
+
+void denovo_snp::set_read(bam1_t const* read) {
+    
 }
