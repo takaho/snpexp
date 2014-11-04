@@ -10,6 +10,7 @@ using std::exception;
 using std::invalid_argument;
 using std::runtime_error;
 using std::out_of_range;
+using std::logic_error;
 
 namespace tkbio {
     class dbsnp_file;
@@ -121,6 +122,7 @@ namespace tkbio {
         static polymorphic_allele NO_DATA;
     public:
         polymorphic_allele(int chromosome, int position);
+        polymorphic_allele(int chromosome, int position, int const* bases1, int const* bases2);
         void set_bases(int slot, int a, int c, int g, int t) throw (out_of_range);
         int position() const { return _position; }
         void get_bases(int slot, int*& bases) const throw (out_of_range);
@@ -133,7 +135,7 @@ namespace tkbio {
     };
 
     class denovo_snp {
-        //const gtffile* genes;
+        const gtffile* _genes;
         int _chromosome;
         int _start;
         int _stop;
@@ -142,17 +144,24 @@ namespace tkbio {
         int** _count1;
         int** _count2;
     private:
-        void initialize_buffer(const gtffile* gtf, int chromosome, int start, int end);
-        void set_read(bam1_t const* read);
+        void initialize_buffer(const gtffile* gtf, int chromosome, int start, int stop) throw (std::logic_error);
+        //void set_read(int slot, bam1_t const* read);
         int get_index(int position) const;
+        void release_buffer();
     public:
-        denovo_snp(const gtffile* gtf, int chromosome, int start, int end);
+        denovo_snp(const gtffile* gtf, int chromosome, int start, int stop) throw (std::logic_error);
         ~denovo_snp();
-        void add(bam1_t const* read);
+        int start() const { return _start; }
+        int stop() const { return _stop; }
+        int chromosome() const { return _chromosome; }
+        void add_read(int slot, bam1_t const* read) throw (out_of_range);
+        void set_scope(int chromosome, int start, int stop);
         polymorphic_allele get_allele(int position) const;
-        vector<polymorphic_allele> get_polymorphism(int coverage, double heterogeneity) const;
+        vector<polymorphic_allele> get_polymorphism(int coverage, double heterogeneity) const;///, double tolerance=0.0) const;
+        vector<polymorphic_allele> get_polymorphism(int coverage, double heterogeneity, int start, int stop) const;///, double tolerance=0.0) const;
         //void add(in position, );
         //void clear();
+        std::string to_string() const;
         static void enumerate_hetero(int argc, char** argv) throw (exception);
     };
 }

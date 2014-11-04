@@ -21,6 +21,7 @@
 #include <distsnp.hxx>
 #include <gtf.hxx>
 
+using std::strncmp;
 using std::string;
 using std::vector;
 using std::map;
@@ -845,213 +846,19 @@ void snp_distance::main(int argc, char** argv) throw (exception) {
     delete dbsnp;
 }
 
-void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
-    try {
-        const char* filename1 = get_argument_string(argc, argv, "1", "/mnt/smb/tae/stap/shira/BAM6/Sample6.bam");
-        const char* filename2 = get_argument_string(argc, argv, "2", "/mnt/smb/tae/stap/shira/BAM12/Sample12.bam");
-        const char* filename_output = get_argument_string(argc, argv, "o", NULL);
-        const char* filename_gtf = get_argument_string(argc, argv, "G", NULL);
-        const char* filename_chrm = get_argument_string(argc, argv, "s", NULL);
-        int coverage = get_argument_integer(argc, argv, "c", 20);
-        double heterozygosity = get_argument_float(argc, argv, "z", 0.5);
-        int chunk_size = get_argument_integer(argc, argv, "w",  200000);
-        int margin_size = get_argument_integer(argc, argv, "m", 100000);
-        int num_files = 2;
-        int maximum_reads_in_window = get_argument_integer(argc, argv, "x", 0);
-        bool verbose = has_option(argc, argv, "verbose");
-
-        if (verbose) {
-            cerr << "filename 1 : " << filename1 << endl;
-            cerr << "filename 2 : " << filename2 << endl;
-            cerr << "gtf        : " << filename_gtf << endl;
-            cerr << "heterozygosity : " << heterozygosity << endl;
-            cerr << "coverage   : " << coverage << endl;
-            cerr << "chunk size : " << chunk_size << endl;
-            cerr << "margin     : " << margin_size << endl;
-            cerr << "max reads  : " << maximum_reads_in_window << endl;
-            cerr << "output     : " << (filename_output == NULL ? "stdout" : filename_output) << endl;
-        }
-
-        gtffile* gtf = gtffile::load_gtf(filename_gtf);
-        ostream* ost = &cout;
-        bamFile* bamfiles = new bamFile[num_files];
-        bam_header_t** headers = new bam_header_t*[num_files];
-        bam1_t** reads = new bam1_t*[num_files];
-
-        if (filename_output != NULL) {
-            ofstream* fo = new ofstream(filename_output);
-            if (fo->is_open() == false) {
-                throw invalid_argument("cannot open output file");
-            }
-            ost = fo;
-        }
-
-        // if (verbose) {
-        //     cerr << "opening files\n";
-        // }
-        bamfiles[0] = bam_open(filename1, "rb");
-        bamfiles[1] = bam_open(filename2, "rb");
-        for (int i = 0; i < num_files; i++) {
-            headers[i] = bam_header_read(bamfiles[i]);
-            reads[i] = bam_init1();
-        }
-
-        // if (verbose) {
-        //     cerr << "check integrity\n";
-        // }
-        if (check_header_consistency(num_files, headers) == false) {
-            throw runtime_error("incompatible bam files");
-        }
-
-        int current_chromosome = -1;
-        int next_chromosome = -1;
-        int position = 0;
-        int next_position = position + chunk_size;
-        int steps = 0;
-        vector<chromosome_seq*> chromosomes = chromosome_seq::load_genome(filename_chrm);
-        map<int,chromosome_seq const*> bam2chrm = chromosome_seq::map_chromosome(headers[0], chromosomes);
-        
-//        bool debug = false;
-        for (;;) {
-            bool chromosome_change = false;
-            bool finished = false;
-            for (int i = 0; i < num_files; i++) {
-                //cerr << i << endl;
-                for (;;) {
-                    if (bam_read1(bamfiles[i], reads[i]) > 0) {
-                        bam1_t const* r = reads[i];
-                        if (maximum_reads_in_window <= 0) {// || detectors[i]->size() < maximum_reads_in_window) {
-                            //detectors[i]->add_read(r);
-                            // int len = read->core.n_cigar;
-                            // const uint8_t* sequence = bam1_seq(read);
-                            // int offset = 4;
-                            // for (int j = 0; j < len; j++) {
-                            //     uint8_t base = (sequence[(j+seqpos) >> 1] >> offset) & 15;
-                            //     offset = 4 - offset;
-                            //     switch (base) {
-                            //     case 15: break; // N
-                            //     case 1: _a[pos + j] ++; ; break;
-                            //     case 2: _c[pos + j] ++; ; break;
-                            //     case 4: _g[pos + j] ++; ; break;
-                            //     case 8: _t[pos + j] ++; ; break;
-                            //     }
-                            // }
-                        }
-
-                        int chrm = r->core.tid;
-                        int pos = r->core.pos;
-
-                        if (chrm != current_chromosome) {
-                            chromosome_change = true;
-                            if (next_chromosome <= 0) {
-                                next_chromosome = chrm;
-                            }
-                            break;
-                        }
-                        if (pos > next_position) {
-                            break;
-                        }
-                    } else {
-                        finished = true;
-                        chromosome_change = false;
-                        break;
-                    }
-                }
-            }
-
-            // detect gaps and insertions
-            if (current_chromosome >= 0) {
-                if (verbose) {
-                    if (++steps % 1000 == 0) {
-                        cerr << " " << headers[0]->target_name[current_chromosome] << ":" << position << "-" << next_position << " ";
-                        //cerr << current_chromosome << ":" << position << "-" << next_position << " ";
-                        for (int i = 0; i < num_files; i++) {
-                            cerr << " " << i << ":";// << ;//detectors[i]->size();
-                        }
-                        cerr << "     \r";
-                    }
-                }
-            }
-
-            if (finished) {
-                break;
-            }
-
-            if (chromosome_change) {
-                int pos_min = numeric_limits<int>::max();
-                if (verbose) {
-                    int total_reads = 0;
-                    for (int i = 0; i < num_files; i++) {
-                        //total_reads += detectors[i]->size();
-                    }
-                    cerr << "change chromosome to " << headers[0]->target_name[next_chromosome] << ", sweep " << total_reads << "reads from " << position << "\r";
-                }
-                if (!finished) {
-                    for (int i = 0; i < num_files; i++) {
-                        //detectors[i]->sweep(current_chromosome);
-                        pair<int,int> region;// = detectors[i]->span();
-                        pos_min = pos_min < region.first ? pos_min : region.first;
-                    }
-                    if (pos_min == numeric_limits<int>::max()) {
-                        pos_min = 0;
-                    }
-                    current_chromosome = next_chromosome;
-                    next_chromosome = -1;
-                    position = pos_min;
-                    next_position = position + chunk_size;
-                } else {
-                    break;
-                }
-            } else { // next position
-                for (int i = 0; i < num_files; i++) {
-                    //detectors[i]->sweep(current_chromosome, 0, next_position);// - margin_size);
-                }
-                int pos_min = numeric_limits<int>::max();
-                for (int i = 0; i < num_files; i++) {
-                    pair<int,int> span;// = detectors[i]->span();
-                    if (span.second > 0 && pos_min > span.first) {
-                        pos_min = span.first;
-                    }
-                    //detectors[i]->sweep(current_chromosome);
-                }
-                if (pos_min == numeric_limits<int>::max()) {
-                    pos_min = next_position;
-                } else if (pos_min > next_position) {
-                    next_position = pos_min;
-                }
-                position = next_position;
-                next_position = position + chunk_size;
-            }
-        }
-
-        if (filename_output != NULL) {
-            dynamic_cast<ofstream*>(ost)->close();
-            delete ost;
-            ost = &cout;
-        }
-
-        for (int i = 0; i < num_files; i++) {
-            bam_destroy1(reads[i]);
-            bam_header_destroy(headers[i]);
-            bam_close(bamfiles[i]);
-            //delete detectors[i];
-        }
-        //delete[] detectors;
-        delete[] reads;
-        delete[] headers;
-        delete[] bamfiles;
-        delete gtf;
-        //return 0;
-
-    } catch (exception& e) {
-        throw;
-    }
-}
-
 polymorphic_allele::polymorphic_allele(int chromosome, int position) {
     _chromosome = chromosome;
     _position = position;
     for (int i = 0; i < 8; i++) _bases[i] = 0;
+}
+
+polymorphic_allele::polymorphic_allele(int chromosome, int position, int const* bases1, int const* bases2) {
+    _chromosome = chromosome;
+    _position = position;
+    for (int i = 0; i < 4; i++) {
+        _bases[i] = bases1[i];
+        _bases[i + 4] = bases2[i];
+    }
 }
 
 void polymorphic_allele::set_bases(int slot, int a, int c, int g, int t) throw (out_of_range) {
@@ -1140,14 +947,22 @@ int polymorphic_allele::coverage(int slot) const throw (out_of_range) {
 
 polymorphic_allele polymorphic_allele::NO_DATA(-1,-1);
 
-denovo_snp::denovo_snp(const gtffile* gtf, int chromosome, int start, int end) {
+denovo_snp::denovo_snp(const gtffile* gtf, int chromosome, int start, int stop) throw (logic_error) {
+    if (start < 0) start = 0;
+    _genes = gtf;
     _size = 0;
     _position = NULL;
+    _start = start;
+    _stop = stop;
     _count1 = _count2 = NULL;
-    initialize_buffer(gtf, chromosome, start, end);
+    initialize_buffer(gtf, chromosome, start, stop);
 }
 
 denovo_snp::~denovo_snp() {
+    release_buffer();
+}
+
+void denovo_snp::release_buffer() {
     for (int i = 0; i < _size; i++) {
         delete[] _count1[i];
         delete[] _count2[i];
@@ -1155,6 +970,90 @@ denovo_snp::~denovo_snp() {
     delete[] _count1;
     delete[] _count2;
     delete[] _position;
+}
+
+void denovo_snp::set_scope(int chromosome, int start, int stop) {
+    if (_chromosome != chromosome || _size == 0) {
+        release_buffer();
+        initialize_buffer(_genes, chromosome, start, stop);
+    } else {
+        if (_position[_size - 1] >= start || _position[0] < stop) {
+            vector<int> available;
+            int begin = _size;
+            for (int i = 0; i < _size; i++) {
+                int pos = _position[i];
+                if (pos >= start) {
+                    begin = i;
+                    break;
+                }
+            }
+            int end = 0;
+            for (int i = _size - 1; i >= 0; i--) {
+                int pos = _position[i];
+                if (pos <= stop) {
+                    end = i + 1;
+                    break;
+                }
+            }
+            int old_size = _size;
+            int* old_position = _position;
+            int** old_count1 = _count1;
+            int** old_count2 = _count2;
+            initialize_buffer(_genes, _chromosome, _start, _stop);
+            int buffer_size = old_size + _size;
+            //release_buffer();
+            int* pbuf = new int[buffer_size];
+            int** cbuf1 = new int*[buffer_size];
+            int** cbuf2 = new int*[buffer_size];
+            for (int i = 0; i < buffer_size; i++) {
+                cbuf1[i] = new int[4];
+                cbuf2[i] = new int[4];
+                for (int j = 0; j < 4; j++) {
+                    cbuf1[i][j] = cbuf2[i][j] = 0;
+                }
+            }
+            int i0 = 0, i1 = 0;
+            int index = 0;
+            for (;;) {
+                int p0 = _position[i0];
+                int p1 = old_position[i1];
+                if (p0 < p1) {
+                    pbuf[index++] = p0;
+                    if (++i0 == _size) {
+                        for (int i = i1; i < old_size; i++) {
+                            for (int j = 0; j < 4; j++) {
+                                cbuf1[index][j] = old_count1[i1][j];
+                                cbuf2[index][j] = old_count2[i1][j];
+                            }
+                            pbuf[index++] = old_position[i];
+                        }
+                        break;
+                    }
+                } else if (p0 > p1) {
+                    pbuf[index++] = p1;
+                    if (++i1 == old_size) {
+                        for (int i = i0; i < _size; i++) {
+                            pbuf[index++] = _position[i];
+                        }
+                        break;
+                    }
+                } else {
+                    for (int j = 0; j < 4; j++) {
+                        cbuf1[index][j] = old_count1[i1][j];
+                        cbuf2[index][j] = old_count2[i1][j];
+                    }
+                    pbuf[index++] = p0;
+                }
+            }
+            release_buffer();
+            _size = index;
+            _count1 = cbuf1;
+            _count2 = cbuf2;
+            _start = start;
+            _stop = stop;
+            _chromosome = chromosome;
+        }
+    }
 }
 
 int denovo_snp::get_index(int position) const {
@@ -1189,7 +1088,7 @@ polymorphic_allele denovo_snp::get_allele(int position) const {
     return pa;
 }
 
-void denovo_snp::initialize_buffer(const gtffile* gtf, int chromosome, int start, int end) {
+void denovo_snp::initialize_buffer(const gtffile* gtf, int chromosome, int start, int end) throw (logic_error) {
     int* posbuffer = new int[end - start];
     for (int i = 0, span = end - start; i < span; i++) {
         posbuffer[i] = 0;
@@ -1228,6 +1127,317 @@ void denovo_snp::initialize_buffer(const gtffile* gtf, int chromosome, int start
     }
 }
 
-void denovo_snp::set_read(bam1_t const* read) {
-    
+void denovo_snp::add_read(int slot, bam1_t const* read) throw (out_of_range) {
+    const uint32_t* cigar = bam1_cigar(read);
+    const uint8_t* sequence = bam1_seq(read);
+    int len = read->core.n_cigar;
+    int rpos = read->core.pos; // reference position
+    int qpos = 0; // query position
+    int offset = 4;
+    if (slot != 0 && slot != 1) {
+    }
+    int** count;
+    if (slot == 0) {
+        count = _count1;
+    } else if (slot == 1) {
+        count = _count2;
+    } else {
+        throw out_of_range("slot must be 0 or 1");
+    }
+//    int 
+    for (int i = 0; i < len; i++) {
+        int op = bam_cigar_op(cigar[i]);
+        int slen = bam_cigar_oplen(cigar[i]);
+        if (op == BAM_CMATCH || op == BAM_CDIFF || op == BAM_CEQUAL) { // M
+//        if (op == BAM_CMATCH) {
+            int index = -1;
+            //int index = get_index(rpos);
+            for (int j = 0; j < slen; j++) {
+                if (index < 0) {
+                    index = get_index(rpos);
+                } else {
+                    if (_position[++index] != rpos) {
+                        index = -1;
+                    }
+                }
+                if (index >= 0) {
+                    uint8_t base = (sequence[qpos >> 1] >> offset) & 15;
+                    if (base == 1) { // A
+                        count[index][0] ++;
+                    } else if (base == 2) { // C
+                        count[index][1] ++;
+                    } else if (base == 4) { // G
+                        count[index][2] ++;
+                    } else if (base == 8) { // T
+                        count[index][3] ++;
+                    } 
+                }
+                qpos++;
+                offset ^= 4;
+            }
+//            ss << 'M';
+        } else if (op == BAM_CINS) {
+//            ss << 'I';
+            qpos += slen;
+            offset ^= ((slen & 1) << 2);
+        } else if (op == BAM_CDEL) {
+            rpos += slen;
+//            ss << 'D';
+        } else {
+            break;
+        }
+    }
 }
+
+namespace {
+    void find_major_alleles(int const* bases, int& b1, int& n1, int& b2, int& n2) {
+    }
+}
+
+vector<polymorphic_allele> denovo_snp::get_polymorphism(int coverage, double heterogeneity) const {
+    vector<polymorphic_allele> alleles;
+    for (int i = 0; i < _size; i++) {
+        int b11, b12, b21, b22;
+        int n11, n12, n21, n22;
+        find_major_alleles(_count1[i], b11, n11, b12, n12);
+        int c1 = n11 + n12;
+        if (c1 < coverage) continue;
+        find_major_alleles(_count2[i], b21, n21, b22, n22);
+        int c2 = n21 + n22;
+        if (c2 < coverage) continue;
+        if ((c1 * heterogeneity < n12 && n22 == 0) 
+            || (c2 * heterogeneity < n22 && n12 == 0)) {
+            alleles.push_back(polymorphic_allele(_chromosome, _position[i], _count1[i], _count2[i]));
+        }
+    }
+    return alleles;
+}
+
+
+void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
+    try {
+        const char* filename1 = get_argument_string(argc, argv, "1", "/mnt/smb/tae/stap/shira/BAM6/Sample6.bam");
+        const char* filename2 = get_argument_string(argc, argv, "2", "/mnt/smb/tae/stap/shira/BAM12/Sample12.bam");
+        const char* filename_output = get_argument_string(argc, argv, "o", NULL);
+        const char* filename_gtf = get_argument_string(argc, argv, "G", NULL);
+        const char* filename_chrm = get_argument_string(argc, argv, "s", NULL);
+        int coverage = get_argument_integer(argc, argv, "c", 20);
+        double heterozygosity = get_argument_float(argc, argv, "z", 0.5);
+        int chunk_size = get_argument_integer(argc, argv, "w",  200000);
+        int margin_size = get_argument_integer(argc, argv, "m", 100000);
+        int num_files = 2;
+        int maximum_reads_in_window = get_argument_integer(argc, argv, "x", 0);
+        bool verbose = has_option(argc, argv, "verbose");
+
+        if (verbose) {
+            cerr << "filename 1 : " << filename1 << endl;
+            cerr << "filename 2 : " << filename2 << endl;
+            cerr << "gtf        : " << filename_gtf << endl;
+            cerr << "heterozygosity : " << heterozygosity << endl;
+            cerr << "coverage   : " << coverage << endl;
+            cerr << "chunk size : " << chunk_size << endl;
+            cerr << "margin     : " << margin_size << endl;
+            cerr << "max reads  : " << maximum_reads_in_window << endl;
+            cerr << "output     : " << (filename_output == NULL ? "stdout" : filename_output) << endl;
+        }
+
+        gtffile* gtf = gtffile::load_gtf(filename_gtf);
+        ostream* ost = &cout;
+        bamFile* bamfiles = new bamFile[num_files];
+        bam_header_t** headers = new bam_header_t*[num_files];
+        bam1_t** reads = new bam1_t*[num_files];
+        int* status = new int[num_files];
+
+        if (filename_output != NULL) {
+            ofstream* fo = new ofstream(filename_output);
+            if (fo->is_open() == false) {
+                throw invalid_argument("cannot open output file");
+            }
+            ost = fo;
+        }
+
+        // if (verbose) {
+        //     cerr << "opening files\n";
+        // }
+        bamfiles[0] = bam_open(filename1, "rb");
+        bamfiles[1] = bam_open(filename2, "rb");
+        for (int i = 0; i < num_files; i++) {
+            headers[i] = bam_header_read(bamfiles[i]);
+            reads[i] = bam_init1();
+            status[i] = 0;
+        }
+
+        // if (verbose) {
+        //     cerr << "check integrity\n";
+        // }
+        if (check_header_consistency(num_files, headers) == false) {
+            throw runtime_error("incompatible bam files");
+        }
+
+        map<int,int> bc2cc;
+        {
+            bam_header_t* h = headers[0];
+            for (int i = 0; i < h->n_targets; i++) {
+                const char* hn = h->target_name[i];
+                if (std::strncmp(hn, "chr", 3) == 0) {
+                    hn += 3;
+                } 
+                int code = convert_chromosome_to_code(hn);
+                bc2cc[i] = code;
+            }
+        }
+        int current_chromosome = -1;
+        int next_chromosome = -1;
+        int position = 0;
+        int next_position = position + chunk_size;
+        int steps = 0;
+        vector<chromosome_seq*> chromosomes = chromosome_seq::load_genome(filename_chrm);
+        map<int,chromosome_seq const*> bam2chrm = chromosome_seq::map_chromosome(headers[0], chromosomes);
+
+        denovo_snp* detector = NULL;
+
+//        bool debug = false;
+        
+        for (;;) {
+            bool chromosome_change = false;
+            bool finished = false;
+            for (int i = 0; i < num_files; i++) {
+                //cerr << i << endl;
+                for (;;) {
+                    bam1_t const* r;
+                    if (status[i] != 0) {
+                        r = reads[i];
+                    } else {
+                        if (bam_read1(bamfiles[i], reads[i]) > 0) {
+                            r = reads[i];
+                        } else {
+                            finished = true;
+                            chromosome_change = false;
+                            break;
+                        }
+                    }
+                    //bam1_t const* r = reads[i];
+                    int chrm = r->core.tid;
+                    int pos = r->core.pos;
+                    
+                    if (chrm != current_chromosome) {
+                        chromosome_change = true;
+                        if (next_chromosome <= 0) {
+                            next_chromosome = chrm;
+                        }
+                        status[i] = 1;
+                        break;
+                    }
+                    if (pos > next_position) {
+                        status[i] = 1;
+                        break;
+                    }
+                    
+                    if (detector == NULL) {
+                        int chromosome_code = 0;
+                        detector = new denovo_snp(gtf, chromosome_code, position - margin_size, position + chunk_size + margin_size);
+                    }
+                    
+                    detector->add_read(i, r);
+                    status[i] = 0;
+                }
+            }
+            
+            // detect gaps and insertions
+            if (current_chromosome >= 0) {
+                if (verbose) {
+                    if (++steps % 1000 == 0) {
+                        cerr << " " << headers[0]->target_name[current_chromosome] << ":" << position << "-" << next_position << " ";
+                        //cerr << current_chromosome << ":" << position << "-" << next_position << " ";
+                        for (int i = 0; i < num_files; i++) {
+                            cerr << " " << i << ":";// << ;//detectors[i]->size();
+                        }
+                        cerr << "     \r";
+                    }
+                }
+            }
+
+            if (finished) {
+                break;
+            }
+
+            if (chromosome_change) {
+                int pos_min = numeric_limits<int>::max();
+                if (verbose) {
+                    int total_reads = 0;
+                    for (int i = 0; i < num_files; i++) {
+                        //total_reads += detectors[i]->size();
+                    }
+                    cerr << "change chromosome to " << headers[0]->target_name[next_chromosome] << ", sweep " << total_reads << "reads from " << position << "\r";
+                }
+                if (!finished) {
+                    for (int i = 0; i < num_files; i++) {
+                        //detectors[i]->sweep(current_chromosome);
+                        pair<int,int> region;// = detectors[i]->span();
+                        pos_min = pos_min < region.first ? pos_min : region.first;
+                    }
+                    if (pos_min == numeric_limits<int>::max()) {
+                        pos_min = 0;
+                    }
+                    current_chromosome = next_chromosome;
+                    next_chromosome = -1;
+                    position = pos_min;
+                    next_position = position + chunk_size;
+                    if (detector != NULL) {
+                        detector->set_scope(bc2cc[current_chromosome], position, next_position + margin_size);
+                    }
+                } else {
+                    break;
+                }
+            } else { // next position
+                for (int i = 0; i < num_files; i++) {
+                    //detectors[i]->sweep(current_chromosome, 0, next_position);// - margin_size);
+                }
+                int pos_min = numeric_limits<int>::max();
+                for (int i = 0; i < num_files; i++) {
+                    pair<int,int> span;// = detectors[i]->span();
+                    if (span.second > 0 && pos_min > span.first) {
+                        pos_min = span.first;
+                    }
+                    //detectors[i]->sweep(current_chromosome);
+                }
+                if (pos_min == numeric_limits<int>::max()) {
+                    pos_min = next_position;
+                } else if (pos_min > next_position) {
+                    next_position = pos_min;
+                }
+                position = next_position;
+                next_position = position + chunk_size;
+                if (detector != NULL) {
+                    detector->set_scope(detector->_chromosome, position, next_position + margin_size);
+                }
+            }
+        }
+
+        if (filename_output != NULL) {
+            dynamic_cast<ofstream*>(ost)->close();
+            delete ost;
+            ost = &cout;
+        }
+
+        for (int i = 0; i < num_files; i++) {
+            if (reads[i] != NULL) {
+                bam_destroy1(reads[i]);
+            }
+            bam_header_destroy(headers[i]);
+            bam_close(bamfiles[i]);
+            //delete detectors[i];
+        }
+        delete detector;
+        delete[] reads;
+        delete[] headers;
+        delete[] bamfiles;
+        delete gtf;
+        delete[] status;
+        //return 0;
+
+    } catch (exception& e) {
+        throw;
+    }
+}
+
