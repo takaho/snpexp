@@ -1591,7 +1591,9 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
                 if (code < 0 || code > 128) {
                     code = -1;
                 }
-                bc2cc[i] = code;
+                if (code >= 0) {
+                    bc2cc[i] = code;
+                }
             }
         }
         //cout << bc2cc.size() << endl;
@@ -1655,11 +1657,9 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
                     if (detector == NULL) {
                         if (bc2cc.find(current_chromosome) != bc2cc.end()) {
                             int chrm = bc2cc[current_chromosome];
-                            if (chrm >= 0) {
                             //cerr << "instanciate new detector      \n";
-                                detector = new denovo_snp(gtf, bc2cc[current_chromosome], position - margin_size, position + chunk_size + margin_size);
-                                detector->set_quality(quality_threshold);
-                            }
+                            detector = new denovo_snp(gtf, chrm, position - margin_size, position + chunk_size + margin_size);
+                            detector->set_quality(quality_threshold);
                         }
                     }
                     if (detector != NULL) {
