@@ -21,7 +21,6 @@
 #include <distsnp.hxx>
 #include <gtf.hxx>
 
-using std::strncmp;
 using std::string;
 using std::vector;
 using std::map;
@@ -65,17 +64,12 @@ namespace {
 
 
 //#define TEST 1
-dbsnp_locus::dbsnp_locus(size_t position, const string& reference, const string& alternative) {//, int num_strains) {
+dbsnp_locus::dbsnp_locus(size_t position, const string& reference, const string& alternative) {
     _position = position;
     _reference = reference;
     _alternative = alternative;
-    //num_strains = 0;
     _num_strains = 0;//num_strains;
     _strains = NULL;
-//     _strains = new unsigned char[_num_strains];
-//     for (int i = 0; i < _num_strains; i++) {
-//         _strains[i] = 0x00;
-//     }
 }
 
 dbsnp_locus::dbsnp_locus(size_t position, const string& rsid, const string& reference, const string& alternative, int num_strains) {
@@ -536,7 +530,6 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
         string line;
         getline(fi, line);
         vector<string> items = split_items(line, '\t');
-        //cout << items[0] << ":" << items[1] << "\t" << items[2] << endl;
         if (items[0] != cname) break;//chromosome) break;
         if (_strains.size() == 0 || items.size() >= _strains.size() + col_strain) {
             int pos = atoi(items[1].c_str());
@@ -1114,36 +1107,29 @@ void denovo_snp::set_scope(int chromosome, int start, int stop) {
     } else {
         if (_position[_size - 1] >= start || _position[0] < stop) {
             vector<int> available;
-            int begin = _size;
-            for (int i = 0; i < _size; i++) {
-                int pos = _position[i];
-                if (pos >= start) {
-                    begin = i;
-                    break;
-                }
-            }
-            int end = 0;
-            for (int i = _size - 1; i >= 0; i--) {
-                int pos = _position[i];
-                if (pos <= stop) {
-                    end = i + 1;
-                    break;
-                }
-            }
+            // int begin = _size;
+            // for (int i = 0; i < _size; i++) {
+            //     int pos = _position[i];
+            //     if (pos >= start) {
+            //         begin = i;
+            //         break;
+            //     }
+            // }
+            // int end = 0;
+            // for (int i = _size - 1; i >= 0; i--) {
+            //     int pos = _position[i];
+            //     if (pos <= stop) {
+            //         end = i + 1;
+            //         break;
+            //     }
+            // }
             int old_size = _size;
             int* old_position = _position;
             int** old_count1 = _count1;
             int** old_count2 = _count2;
-            //cout << "SIZE=" << _size << endl;
-            //cout << "OLD:" << hex << (void*)old_count1 << ", " << (void*)old_count2 << dec << endl;
-            // for (int i = 0; i < _size; i++) {
-            //     cout << i << ":OLD:" << hex << (void*)old_count1[i] << ", " << (void*)old_count2[i] << dec << endl;
-            // }
 
             initialize_buffer(chromosome, start, stop);
             int buffer_size = old_size + _size;
-            //cout << "prepared buffer size " << buffer_size << endl;
-            //release_buffer();
             int* pbuf = new int[buffer_size];
             int** cbuf1 = new int*[buffer_size];
             int** cbuf2 = new int*[buffer_size];
@@ -1154,17 +1140,12 @@ void denovo_snp::set_scope(int chromosome, int start, int stop) {
                     cbuf1[i][j] = cbuf2[i][j] = 0;
                 }
             }
-            //cout << "OLD:" << hex << (void*)old_count1[0] << ", " << (void*)old_count2[0] << dec << endl;
-            // i0 : index of current fields
-            // i1 : index of old fields
+
             int i0 = 0, i1 = 0;
             int index = 0;
             for (;;) {
                 int p0 = _position[i0];
                 int p1 = old_position[i1];
-                //cout << "INDEX:" << index << ", " << buffer_size - index << " = " << _size - i0 << " + " << old_size - i1 << endl;
-                //cout << i0 << ":" << p0 << ", " << i1 << ":" << p1 << endl;
-                //cout << "OLD:" << hex << (void*)old_count1[0] << ", " << (void*)old_count2[0] << dec << endl;
 
                 if (p0 < p1) {
                     pbuf[index++] = p0;
@@ -1178,11 +1159,7 @@ void denovo_snp::set_scope(int chromosome, int start, int stop) {
                         break;
                     }
                 } else {
-                    //cout << "OLD:" << hex << (void*)old_count1[0] << ", " << (void*)old_count2[0] << dec << endl;
-                    //cout << index << " : pos=" << p0 << endl;
                     for (int j = 0; j < 4; j++) {
-                        //cout << j << endl;
-                        //                        cout << hex << (void*)cbuf1[index] << ", " << old_count1[i1] << dec << endl;
                         cbuf1[index][j] = old_count1[i1][j];
                         cbuf2[index][j] = old_count2[i1][j];
                     }
@@ -1191,9 +1168,7 @@ void denovo_snp::set_scope(int chromosome, int start, int stop) {
                     i0++;
                 }
                 if (i0 == _size) {
-                    //cout << "fill tail\n";
                     for (int i = i1; i < old_size; i++) {
-                        //cout << i << " / " << old_size << endl;
                         memcpy(cbuf1[index], old_count1[i], sizeof(int) * 4);
                         memcpy(cbuf2[index], old_count2[i], sizeof(int) * 4);
                         pbuf[index++] = old_position[i];
@@ -1207,9 +1182,8 @@ void denovo_snp::set_scope(int chromosome, int start, int stop) {
                     break;
                 }
             }
-            //cout << "INDEX=" << index << endl;
+
             release_buffer();
-            //cout << "released\n";
             _size = index;
             _reserved = buffer_size;
             _position = pbuf;
@@ -1593,7 +1567,7 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
             bam_header_t* h = headers[0];
             for (int i = 0; i < h->n_targets; i++) {
                 const char* hn = h->target_name[i];
-                if (std::strncmp(hn, "chr", 3) == 0) {
+                if (strncmp(hn, "chr", 3) == 0) {
                     hn += 3;
                 } 
                 int code = convert_chromosome_to_code(hn);
@@ -1622,7 +1596,7 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
         denovo_snp* detector = NULL;
 
 //        bool debug = false;
-        *ost << "CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t";
+        *ost << "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t";
         *ost << get_sample_name(filename1) << "\t" << get_sample_name(filename2) << endl;
         for (;;) {
             bool chromosome_change = false;
