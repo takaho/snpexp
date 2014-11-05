@@ -1061,6 +1061,7 @@ void denovo_snp::set_scope_without_gtf(int chromosome, int start, int stop) {
     if (chromosome == _chromosome && _start <= stop && start <= _stop) { // bind
         int minpos = _start < start ? _start : start;
         int maxpos = _stop > stop ? _stop : stop;
+
         delete[] _position;
         int** cbuf1 = _count1;
         int** cbuf2 = _count2;
@@ -1088,7 +1089,7 @@ void denovo_snp::set_scope_without_gtf(int chromosome, int start, int stop) {
         }
         delete[] cbuf1;
         delete[] cbuf2;
-        
+
     } else {
         release_buffer();
         initialize_buffer(chromosome, start, stop);
@@ -1238,7 +1239,7 @@ void denovo_snp::initialize_buffer_without_gtf(int chromosome, int start, int st
     _chromosome = chromosome;
     _start = start;
     _stop = stop;
-    _reserved = _size = stop - start + 1;
+    _reserved = _size = stop - start;// + 1;
     _position = new int[_size];
     for (int i = 0; i < _size; i++) {
         _position[i] = i + start;
@@ -1261,7 +1262,7 @@ void denovo_snp::initialize_buffer(int chromosome, int start, int stop) throw (l
         initialize_buffer_without_gtf(chromosome, start, stop);
         return;
     }
-    int* posbuffer = new int[stop - start];
+    int* posbuffer = new int[stop - start];// + 1];
     for (int i = 0, span = stop - start; i < span; i++) {
         posbuffer[i] = 0;
     }
@@ -1496,6 +1497,7 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
         int maximum_reads_in_window = get_argument_integer(argc, argv, "x", 0);
         int quality_threshold = get_argument_integer(argc, argv, "q", 10);
         bool verbose = has_option(argc, argv, "verbose");
+        const char* target_chromosome = get_argument_string(argc, argv, "C", NULL);
 
         // if (filename_gtf == NULL || file_exists(filename_gtf) == false) {
         //     throw logic_error("cannot open GTF file");
@@ -1511,6 +1513,9 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
             cerr << "max reads  : " << maximum_reads_in_window << endl;
             cerr << "quality    : " << quality_threshold << endl;
             cerr << "output     : " << (filename_output == NULL ? "stdout" : filename_output) << endl;
+        }
+        if (file_exists(filename1) == false || file_exists(filename2) == false) {
+            throw logic_error("two bam files required");
         }
 
         //cout << "GTF\n";
@@ -1564,19 +1569,33 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
 
         map<int,int> bc2cc;
         {
+            set<string> accepted;
+            if (target_chromosome != NULL) {
+                vector<string> items = split_items(target_chromosome, ',');
+                for (int i = 0; i < (int)items.size(); i++) {
+                    cerr << items[i] << endl;
+                    accepted.insert(items[i]);
+                }
+            }
             bam_header_t* h = headers[0];
             for (int i = 0; i < h->n_targets; i++) {
                 const char* hn = h->target_name[i];
                 if (strncmp(hn, "chr", 3) == 0) {
                     hn += 3;
                 } 
-                int code = convert_chromosome_to_code(hn);
+                int code = -1;
+                if (accepted.size() == 0 || accepted.find(hn) != accepted.end()) {
+                    //cout << "accepted " << hn << endl;
+                    code = convert_chromosome_to_code(hn);
+                }
                 if (code < 0 || code > 128) {
                     code = -1;
                 }
                 bc2cc[i] = code;
             }
         }
+        //cout << bc2cc.size() << endl;
+        //exit(0);
         int current_chromosome = -1;
         int next_chromosome = -1;
         int position = 0;
@@ -1635,20 +1654,25 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
                     
                     if (detector == NULL) {
                         if (bc2cc.find(current_chromosome) != bc2cc.end()) {
-                            detector = new denovo_snp(gtf, bc2cc[current_chromosome], position - margin_size, position + chunk_size + margin_size);
-                            detector->set_quality(quality_threshold);
+                            int chrm = bc2cc[current_chromosome];
+                            if (chrm >= 0) {
+                            //cerr << "instanciate new detector      \n";
+                                detector = new denovo_snp(gtf, bc2cc[current_chromosome], position - margin_size, position + chunk_size + margin_size);
+                                detector->set_quality(quality_threshold);
+                            }
                         }
                     }
-                    
-                    if ((maximum_reads_in_window == 0 || detector->mapped(i) < maximum_reads_in_window) && detector->has_buffer()) {
-                        detector->add_read(i, r);
+                    if (detector != NULL) {
+                        if ((maximum_reads_in_window == 0 || detector->mapped(i) < maximum_reads_in_window) && detector->has_buffer()) {
+                            detector->add_read(i, r);
+                        }
                     }
                     status[i] = 0;
                 }
             }
             
             // detect sample specific SNPs
-            if (current_chromosome >= 0 && detector != NULL) {
+            if (current_chromosome >= 0) {// && detector != NULL) {
                 //cerr << "analyzing " << current_chromosome << "       " << endl;
                 //cerr << headers[0]->target_name[0] << ", " << headers[0]->target_name[1] << ", " << endl;
                 if (verbose) {
@@ -1663,9 +1687,11 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
                         cerr << "     \r";
                     }
                 }
-                vector<polymorphic_allele> alleles = detector->get_polymorphism(coverage, heterozygosity, position, position + chunk_size);
-                for (int i = 0; i < (int)alleles.size(); i++) {
-                    *ost << alleles[i].to_string() << endl;
+                if (detector != NULL) {
+                    vector<polymorphic_allele> alleles = detector->get_polymorphism(coverage, heterozygosity, position, position + chunk_size);
+                    for (int i = 0; i < (int)alleles.size(); i++) {
+                        *ost << alleles[i].to_string() << endl;
+                    }
                 }
             }
 
