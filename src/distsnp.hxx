@@ -143,16 +143,22 @@ namespace tkbio {
         int* _position;
         int** _count1;
         int** _count2;
+        int _mapped;
+        int _reserved;
     private:
         void initialize_buffer(const gtffile* gtf, int chromosome, int start, int stop) throw (std::logic_error);
         //void set_read(int slot, bam1_t const* read);
         int get_index(int position) const;
         void release_buffer();
+        const denovo_snp& operator = (const denovo_snp& rhs);
+        denovo_snp(const denovo_snp& rhs);
     public:
         denovo_snp(const gtffile* gtf, int chromosome, int start, int stop) throw (std::logic_error);
         ~denovo_snp();
         int start() const { return _start; }
         int stop() const { return _stop; }
+        int has_buffer() const { return _size > 0; }
+        int mapped() const { return _mapped; }
         int chromosome() const { return _chromosome; }
         void add_read(int slot, bam1_t const* read) throw (out_of_range);
         void set_scope(int chromosome, int start, int stop);

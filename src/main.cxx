@@ -199,8 +199,10 @@ int main(int argc, char** argv) {
 	  mode = 3;
         } else if (command == "str") {
              mode = 4;
+        } else if (command == "cmp") {
+            mode = 5;
         }
-
+        cout << mode << endl;
         if (mode == 5) {
             try {
                 denovo_snp::enumerate_hetero(argc, argv);
@@ -208,6 +210,7 @@ int main(int argc, char** argv) {
                 throw;
             }
         }
+        exit(0);
 
         if (mode == 4) {
             try {

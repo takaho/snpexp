@@ -32,6 +32,8 @@ THE SOFTWARE.
 #include <map>
 
 using namespace std;
+using std::string;
+using std::map;
 
 namespace tkbio {
     class gtfexon;
@@ -103,6 +105,9 @@ namespace tkbio {
         bool contains_in_exon(int chromosome_code, int start, int end) const;
         bool contains_in_exon_debug(int chromosome_code, int start, int end) const;
         pair<int,int> get_span() const;
+
+        string to_string() const;
+
         static bool compare_position(const gtfgene* lhs, const gtfgene* rhs);
 
         friend class gtffile;
@@ -133,7 +138,8 @@ namespace tkbio {
         bool contains_in_exon(const string& chromosome, int location) const;
         bool contains_in_exon_debug(const string& chromosome, int location) const;
         vector<pair<int,int> > get_exonregion(const string& chromosome, bool utr=true) const;
-        
+        string to_string() const;
+
         static gtffile* load_gtf(const char* fileanme) throw (exception);
     };
 }

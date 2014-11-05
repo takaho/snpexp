@@ -954,7 +954,9 @@ denovo_snp::denovo_snp(const gtffile* gtf, int chromosome, int start, int stop) 
     _position = NULL;
     _start = start;
     _stop = stop;
-    _count1 = _count2 = NULL;
+    _count1 = _count2 = NULL;//new int*[0];
+    _mapped = 0;
+    _reserved = 0;
     initialize_buffer(gtf, chromosome, start, stop);
 }
 
@@ -963,9 +965,11 @@ denovo_snp::~denovo_snp() {
 }
 
 void denovo_snp::release_buffer() {
-    for (int i = 0; i < _size; i++) {
-        delete[] _count1[i];
-        delete[] _count2[i];
+    if (_count1 != NULL) {
+        for (int i = 0; i < _reserved; i++) {
+            delete[] _count1[i];
+            delete[] _count2[i];
+        }
     }
     delete[] _count1;
     delete[] _count2;
@@ -999,8 +1003,15 @@ void denovo_snp::set_scope(int chromosome, int start, int stop) {
             int* old_position = _position;
             int** old_count1 = _count1;
             int** old_count2 = _count2;
-            initialize_buffer(_genes, _chromosome, _start, _stop);
+            //cout << "SIZE=" << _size << endl;
+            //cout << "OLD:" << hex << (void*)old_count1 << ", " << (void*)old_count2 << dec << endl;
+            // for (int i = 0; i < _size; i++) {
+            //     cout << i << ":OLD:" << hex << (void*)old_count1[i] << ", " << (void*)old_count2[i] << dec << endl;
+            // }
+
+            initialize_buffer(_genes, chromosome, start, stop);
             int buffer_size = old_size + _size;
+            //cout << "prepared buffer size " << buffer_size << endl;
             //release_buffer();
             int* pbuf = new int[buffer_size];
             int** cbuf1 = new int*[buffer_size];
@@ -1012,23 +1023,21 @@ void denovo_snp::set_scope(int chromosome, int start, int stop) {
                     cbuf1[i][j] = cbuf2[i][j] = 0;
                 }
             }
+            //cout << "OLD:" << hex << (void*)old_count1[0] << ", " << (void*)old_count2[0] << dec << endl;
+            // i0 : index of current fields
+            // i1 : index of old fields
             int i0 = 0, i1 = 0;
             int index = 0;
             for (;;) {
                 int p0 = _position[i0];
                 int p1 = old_position[i1];
+                //cout << "INDEX:" << index << ", " << buffer_size - index << " = " << _size - i0 << " + " << old_size - i1 << endl;
+                //cout << i0 << ":" << p0 << ", " << i1 << ":" << p1 << endl;
+                //cout << "OLD:" << hex << (void*)old_count1[0] << ", " << (void*)old_count2[0] << dec << endl;
+
                 if (p0 < p1) {
                     pbuf[index++] = p0;
-                    if (++i0 == _size) {
-                        for (int i = i1; i < old_size; i++) {
-                            for (int j = 0; j < 4; j++) {
-                                cbuf1[index][j] = old_count1[i1][j];
-                                cbuf2[index][j] = old_count2[i1][j];
-                            }
-                            pbuf[index++] = old_position[i];
-                        }
-                        break;
-                    }
+                    i0 ++;
                 } else if (p0 > p1) {
                     pbuf[index++] = p1;
                     if (++i1 == old_size) {
@@ -1038,20 +1047,47 @@ void denovo_snp::set_scope(int chromosome, int start, int stop) {
                         break;
                     }
                 } else {
+                    //cout << "OLD:" << hex << (void*)old_count1[0] << ", " << (void*)old_count2[0] << dec << endl;
+                    //cout << index << " : pos=" << p0 << endl;
                     for (int j = 0; j < 4; j++) {
+                        //cout << j << endl;
+                        //                        cout << hex << (void*)cbuf1[index] << ", " << old_count1[i1] << dec << endl;
                         cbuf1[index][j] = old_count1[i1][j];
                         cbuf2[index][j] = old_count2[i1][j];
                     }
                     pbuf[index++] = p0;
+                    i1++;
+                    i0++;
+                }
+                if (i0 == _size) {
+                    //cout << "fill tail\n";
+                    for (int i = i1; i < old_size; i++) {
+                        //cout << i << " / " << old_size << endl;
+                        memcpy(cbuf1[index], old_count1[i], sizeof(int) * 4);
+                        memcpy(cbuf2[index], old_count2[i], sizeof(int) * 4);
+                        pbuf[index++] = old_position[i];
+                    }
+                    break;
+                } 
+                if (i1 == _size) {
+                    for (int i = i0; i < _size; i++) {
+                        pbuf[index++] = _position[i];
+                    }
+                    break;
                 }
             }
+            //cout << "INDEX=" << index << endl;
             release_buffer();
+            //cout << "released\n";
             _size = index;
+            _reserved = buffer_size;
+            _position = pbuf;
             _count1 = cbuf1;
             _count2 = cbuf2;
             _start = start;
             _stop = stop;
             _chromosome = chromosome;
+            _mapped = 0;
         }
     }
 }
@@ -1093,12 +1129,17 @@ void denovo_snp::initialize_buffer(const gtffile* gtf, int chromosome, int start
     for (int i = 0, span = end - start; i < span; i++) {
         posbuffer[i] = 0;
     }
+    _chromosome = chromosome;
     vector<const gtfgene*> genes = gtf->find_genes(_chromosome, start, end);
+    //cout << genes.size() << " genes found\n";
     for (int i = 0; i < (int)genes.size(); i++) {
         const vector<gtfexon>& exons = genes[i]->exons();
+        //cout << "ADD " << genes[i]->to_string() << endl;
         for (int j = 0; j < (int)exons.size(); j++) {
             int p5 = exons[j].position5();
             int p3 = exons[j].position3();
+            if (p5 < start) p5 = start;
+            if (p3 >= end) p3 = end - 1;
             for (int p = p5; p <= p3; p++) {
                 posbuffer[p - start] = 1;
             }
@@ -1111,7 +1152,10 @@ void denovo_snp::initialize_buffer(const gtffile* gtf, int chromosome, int start
             length++;
         }
     }
+    //cout << "buffer size = " << length << endl;
+
     _size = length;
+    _reserved = _size;
     _position = new int[length];
     _count1 = new int*[length];
     _count2 = new int*[length];
@@ -1123,8 +1167,10 @@ void denovo_snp::initialize_buffer(const gtffile* gtf, int chromosome, int start
             for (int j = 0; j < 4; j++) {
                 _count1[j] = _count2[j] = 0;
             }
+            index++;
         }
     }
+    delete[] posbuffer;
 }
 
 void denovo_snp::add_read(int slot, bam1_t const* read) throw (out_of_range) {
@@ -1241,7 +1287,17 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
             cerr << "output     : " << (filename_output == NULL ? "stdout" : filename_output) << endl;
         }
 
+        //cout << "GTF\n";
         gtffile* gtf = gtffile::load_gtf(filename_gtf);
+
+        if (true) {
+            //cout << "test\n";
+            denovo_snp* snp = new denovo_snp(gtf, 1, 105000000, 119000000);
+            snp->set_scope(1, 115000000, 120000000);
+            delete snp;
+            return;
+        }
+
         ostream* ost = &cout;
         bamFile* bamfiles = new bamFile[num_files];
         bam_header_t** headers = new bam_header_t*[num_files];
@@ -1338,7 +1394,9 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
                         detector = new denovo_snp(gtf, chromosome_code, position - margin_size, position + chunk_size + margin_size);
                     }
                     
-                    detector->add_read(i, r);
+                    if ((maximum_reads_in_window == 0 || detector->mapped() < maximum_reads_in_window) && detector->has_buffer()) {
+                        detector->add_read(i, r);
+                    }
                     status[i] = 0;
                 }
             }

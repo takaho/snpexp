@@ -31,8 +31,10 @@ THE SOFTWARE.
 #include <fstream>
 #include <cstdlib>
 #include <algorithm>
+#include <sstream>
 
 using namespace std;
+//using namespace std::stringstream;
 
 #include <gtf.hxx>
 #include <tktools.hxx>
@@ -98,6 +100,12 @@ gtfgene::gtfgene(const string& transcript_id, const string& name, const string& 
     _orientation = '\0';
     _position3 = _position5 = -1;
     _chromosome_code = -1;
+}
+
+string gtfgene::to_string() const {
+    std::stringstream ss;
+    ss << _name << "\t" << _transcript_id << "\t" << _chromosome << ":" << _orientation << ":" << _position5 << "-" << _position3;
+    return ss.str();
 }
 
 void gtfgene::insert(const string& chromosome, char orientation, int pos5, int pos3, const char* feature) {
@@ -364,6 +372,7 @@ vector<const gtfgene*> gtffile::find_genes(const string& chromosome, int start, 
 
 vector<const gtfgene*> gtffile::find_genes(int ccode, int start, int end) const {
     vector<const gtfgene*> selected;
+    cout << ccode << ":" << start << "-" << end << endl;
     if (ccode < 0) {
         vector<const gtfgene*> selected;
         return selected;
