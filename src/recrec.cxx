@@ -751,6 +751,9 @@ void chromosome_seq::load_sequence_from_cache() throw (exception) {
 }
 
 vector<chromosome_seq*> chromosome_seq::load_genome(const char* filename) throw (exception) {
+    if (filename == NULL || tktools::io::file_exists(filename) == false) {
+        throw logic_error("cannot fild genome file");
+    }
     string filename_cache = get_cache_filename(filename);
     if (tktools::io::file_exists(filename_cache.c_str())) {
         try {
@@ -779,7 +782,7 @@ vector<chromosome_seq*> chromosome_seq::load_genome(const char* filename) throw 
                 seq->_sequence = NULL;
                 //seq->set_sequence(length, buffer);
                 seq->_data_end = fpos;
-                cerr << seq->name() << "\t" << seq->_data_start << "-" << seq->_data_end << endl;
+                //cerr << seq->name() << "\t" << seq->_data_start << "-" << seq->_data_end << endl;
                 chromosomes.push_back(seq);
                 seq = NULL;
 #ifdef TEST
@@ -981,6 +984,7 @@ map<int,chromosome_seq const*> tkbio::chromosome_seq::map_chromosome(bam_header_
                 break;
             }
         }
+        //cerr << i << " : " << hex << (void*)chrm << dec << endl;
         converter[i] = chrm;
     }
     return converter;

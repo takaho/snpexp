@@ -119,10 +119,17 @@ namespace tkbio {
         int _chromosome;
         int _position;
         int _bases[8];
+        char _reference;
+        char _alternative;
         static polymorphic_allele NO_DATA;
+    private:
+        void resolve_variation();
     public:
         polymorphic_allele(int chromosome, int position);
         polymorphic_allele(int chromosome, int position, int const* bases1, int const* bases2);
+        void set_variation(char ref, char alt);
+        char reference() const;
+        char alternative() const;
         void set_bases(int slot, int a, int c, int g, int t) throw (out_of_range);
         int position() const { return _position; }
         void get_bases(int slot, int*& bases) const throw (out_of_range);
@@ -143,25 +150,34 @@ namespace tkbio {
         int* _position;
         int** _count1;
         int** _count2;
-        int _mapped;
+        int _mapped1;
+        int _mapped2;
         int _reserved;
+        int _quality;
     private:
-        void initialize_buffer(const gtffile* gtf, int chromosome, int start, int stop) throw (std::logic_error);
+        denovo_snp(const denovo_snp& rhs);
+        void initialize_buffer_without_gtf(int chromosome, int start, int stop) throw (std::logic_error);
+        void initialize_buffer(int chromosome, int start, int stop) throw (std::logic_error);
+        //void initialize_buffer(const gtffile* gtf, int chromosome, int start, int stop) throw (std::logic_error);
         //void set_read(int slot, bam1_t const* read);
         int get_index(int position) const;
         void release_buffer();
         const denovo_snp& operator = (const denovo_snp& rhs);
-        denovo_snp(const denovo_snp& rhs);
     public:
         denovo_snp(const gtffile* gtf, int chromosome, int start, int stop) throw (std::logic_error);
+        denovo_snp(int chromosome, int start, int stop) throw (std::logic_error);
         ~denovo_snp();
         int start() const { return _start; }
         int stop() const { return _stop; }
         int has_buffer() const { return _size > 0; }
-        int mapped() const { return _mapped; }
+        int mapped(int slot) const { return slot == 0 ? _mapped1 : _mapped2; }
         int chromosome() const { return _chromosome; }
+        int quality() const { return _quality; }
+        void set_quality(int qual);
         void add_read(int slot, bam1_t const* read) throw (out_of_range);
         void set_scope(int chromosome, int start, int stop);
+        void set_scope_without_gtf(int chromosome, int start, int stop);
+        
         polymorphic_allele get_allele(int position) const;
         vector<polymorphic_allele> get_polymorphism(int coverage, double heterogeneity) const;///, double tolerance=0.0) const;
         vector<polymorphic_allele> get_polymorphism(int coverage, double heterogeneity, int start, int stop) const;///, double tolerance=0.0) const;

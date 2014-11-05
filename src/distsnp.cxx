@@ -287,7 +287,7 @@ void dbsnp_file::save_cache(const char* filename) const throw (exception) {
         if (num_probes > 0) {
             minpos = (it->second)[0]->position;
             maxpos = (it->second)[it->second.size() - 1]->position;
-            cerr << it->first << "\t" << minpos << "-" << maxpos << endl;
+            //cerr << it->first << "\t" << minpos << "-" << maxpos << endl;
         }
         fo.write(reinterpret_cast<char*>(&minpos), sizeof(int));
         fo.write(reinterpret_cast<char*>(&maxpos), sizeof(int));
@@ -850,6 +850,7 @@ polymorphic_allele::polymorphic_allele(int chromosome, int position) {
     _chromosome = chromosome;
     _position = position;
     for (int i = 0; i < 8; i++) _bases[i] = 0;
+    _reference = _alternative = '\0';
 }
 
 polymorphic_allele::polymorphic_allele(int chromosome, int position, int const* bases1, int const* bases2) {
@@ -859,6 +860,44 @@ polymorphic_allele::polymorphic_allele(int chromosome, int position, int const* 
         _bases[i] = bases1[i];
         _bases[i + 4] = bases2[i];
     }
+    _reference = _alternative = '\0';
+}
+
+void polymorphic_allele::set_variation(char ref, char alt) {
+    _reference = ref;
+    _alternative = alt;
+}
+
+void polymorphic_allele::resolve_variation() {
+    int n1 = _bases[0] + _bases[4];
+    int n2 = 0;
+    int i1 = 0;
+    int i2 = 0;
+    for (int i = 1; i < 4; i++) {
+        int n = _bases[i] + _bases[i + 4];
+        if (n > n2) {
+            if (n > n1) {
+                n2 = n1; i2 = i1;
+                n1 = n; i1 = i;
+            } else {
+                n2 = n; i2 = i;
+            }
+        }
+    }
+    _reference = "ACGT"[i1];
+    _alternative = "ACGT"[i2];
+}
+
+char polymorphic_allele::reference() const {
+    if (_reference != '\0') return _reference;
+    const_cast<polymorphic_allele*>(this)->resolve_variation();
+    return _reference;
+}
+
+char polymorphic_allele::alternative() const {
+    if (_alternative != '\0') return _alternative;
+    const_cast<polymorphic_allele*>(this)->resolve_variation();
+    return _alternative;
 }
 
 void polymorphic_allele::set_bases(int slot, int a, int c, int g, int t) throw (out_of_range) {
@@ -887,8 +926,44 @@ void polymorphic_allele::get_bases(int slot, int*& counts) const throw (out_of_r
     }
 }
 
+
 string polymorphic_allele::to_string() const {
     stringstream ss;
+    // CHROM POS ID REF ALT QUAL FILTER INFO FORMAT #1 #2
+    string cname = tktools::bio::convert_code_to_chromosome(_chromosome);
+    ss << cname << "\t" << (_position + 1) << "\t.\t" << reference() << "\t" << alternative() << "\t100.0\tPASS\t.\tGT:GP";
+    int refid = 0;
+    int altid = 0;
+    switch (reference()) {
+    case 'A': refid = 0; break;
+    case 'C': refid = 1; break;
+    case 'G': refid = 2; break;
+    case 'T': refid = 3; break;
+    }
+    switch (alternative()) {
+    case 'A': altid = 0; break;
+    case 'C': altid = 1; break;
+    case 'G': altid = 2; break;
+    case 'T': altid = 3; break;
+    }
+
+    for (int i = 0; i < 2; i++) {
+        int const* row = i == 0 ? _bases : _bases + 4;
+        string gtype = "0/0"; // 0/1, 1/1
+        int n1 = row[refid];
+        int n2 = row[altid];
+        if (n1 == 0 && n2 > 0) {
+            gtype = "1/1";
+        } else if (n1 > 0 && n2 > 0) {
+            gtype = "0/1";
+        } else if (n1 == 0 && n2 == 0) {
+            gtype = "*";
+        }
+        ss << "\t" << gtype;
+        for (int j = 0; j < 4; j++) {
+            ss << ":" << row[j];
+        }
+    }
     return ss.str();
 }
 
@@ -955,9 +1030,22 @@ denovo_snp::denovo_snp(const gtffile* gtf, int chromosome, int start, int stop) 
     _start = start;
     _stop = stop;
     _count1 = _count2 = NULL;//new int*[0];
-    _mapped = 0;
+    _mapped1 = _mapped2 = 0;
     _reserved = 0;
-    initialize_buffer(gtf, chromosome, start, stop);
+    initialize_buffer(chromosome, start, stop);
+}
+
+denovo_snp::denovo_snp(int chromosome, int start, int stop) throw (logic_error) {
+    if (start < 0) start = 0;
+    _genes = NULL;
+    _size = 0;
+    _position = NULL;
+    _start = start;
+    _stop = stop;
+    _count1 = _count2 = NULL;//new int*[0];
+    _mapped1 = _mapped2 = 0;
+    _reserved = 0;
+    initialize_buffer_without_gtf(chromosome, start, stop);
 }
 
 denovo_snp::~denovo_snp() {
@@ -976,10 +1064,53 @@ void denovo_snp::release_buffer() {
     delete[] _position;
 }
 
+void denovo_snp::set_scope_without_gtf(int chromosome, int start, int stop) {
+    if (chromosome == _chromosome && _start <= stop && start <= _stop) { // bind
+        int minpos = _start < start ? _start : start;
+        int maxpos = _stop > stop ? _stop : stop;
+        delete[] _position;
+        int** cbuf1 = _count1;
+        int** cbuf2 = _count2;
+        int offset = 0;
+        int span = _size;
+        //cout << "CURRENT SIZE = " << _size << endl;
+        if (_start > start) {
+            offset = _start - start;
+        }
+        initialize_buffer(chromosome, minpos, maxpos);
+        //cout << "REVISED SIZE = " << _size << endl;
+        if (span > _size - offset) {
+            span = _size - offset;
+        }
+        //cout << span << endl;
+        for (int i = 0; i < span; i++) {//begin; i < tail; i++) {
+            int* c1 = _count1[i + offset];
+            int* c2 = _count2[i + offset];
+            for (int j = 0; j < 4; j++) {
+                c1[j] = cbuf1[i][j];
+                c2[j] = cbuf2[i][j];
+            }
+            delete[] cbuf1[i];
+            delete[] cbuf2[i];
+        }
+        delete[] cbuf1;
+        delete[] cbuf2;
+        
+    } else {
+        release_buffer();
+        initialize_buffer(chromosome, start, stop);
+    } 
+}
+
 void denovo_snp::set_scope(int chromosome, int start, int stop) {
+    //cerr << __func__ << endl;
+    if (_genes == NULL) {
+        //cerr << __func__ << endl;
+        set_scope_without_gtf(chromosome, start, stop);
+    }
     if (_chromosome != chromosome || _size == 0) {
         release_buffer();
-        initialize_buffer(_genes, chromosome, start, stop);
+        initialize_buffer(chromosome, start, stop);
     } else {
         if (_position[_size - 1] >= start || _position[0] < stop) {
             vector<int> available;
@@ -1009,7 +1140,7 @@ void denovo_snp::set_scope(int chromosome, int start, int stop) {
             //     cout << i << ":OLD:" << hex << (void*)old_count1[i] << ", " << (void*)old_count2[i] << dec << endl;
             // }
 
-            initialize_buffer(_genes, chromosome, start, stop);
+            initialize_buffer(chromosome, start, stop);
             int buffer_size = old_size + _size;
             //cout << "prepared buffer size " << buffer_size << endl;
             //release_buffer();
@@ -1087,7 +1218,7 @@ void denovo_snp::set_scope(int chromosome, int start, int stop) {
             _start = start;
             _stop = stop;
             _chromosome = chromosome;
-            _mapped = 0;
+            _mapped1 = _mapped2 = 0;
         }
     }
 }
@@ -1124,13 +1255,44 @@ polymorphic_allele denovo_snp::get_allele(int position) const {
     return pa;
 }
 
-void denovo_snp::initialize_buffer(const gtffile* gtf, int chromosome, int start, int end) throw (logic_error) {
-    int* posbuffer = new int[end - start];
-    for (int i = 0, span = end - start; i < span; i++) {
+void denovo_snp::initialize_buffer_without_gtf(int chromosome, int start, int stop) throw (logic_error) {
+    if (stop < start) {
+        throw logic_error("start >= stop");
+    }
+    //cerr << "initializing without genes\n";
+    _genes = NULL;
+    _chromosome = chromosome;
+    _start = start;
+    _stop = stop;
+    _reserved = _size = stop - start + 1;
+    _position = new int[_size];
+    for (int i = 0; i < _size; i++) {
+        _position[i] = i + start;
+    }
+    //cerr << "SIZE is " << _size << endl;
+    _count1 = new int*[_size];
+    _count2 = new int*[_size];
+    for (int i = 0; i < _size; i++) {
+        _count1[i] = new int[4];
+        _count2[i] = new int[4];
+        for (int j = 0; j < 4; j++) {
+            _count1[i][j] = _count2[i][j] = 0;
+        }
+    }
+}
+
+void denovo_snp::initialize_buffer(int chromosome, int start, int stop) throw (logic_error) {
+    //cerr << "BUFFER " << hex << (void*) _genes << dec << "      " << endl;
+    if (_genes == NULL) {
+        initialize_buffer_without_gtf(chromosome, start, stop);
+        return;
+    }
+    int* posbuffer = new int[stop - start];
+    for (int i = 0, span = stop - start; i < span; i++) {
         posbuffer[i] = 0;
     }
     _chromosome = chromosome;
-    vector<const gtfgene*> genes = gtf->find_genes(_chromosome, start, end);
+    vector<const gtfgene*> genes = _genes->find_genes(_chromosome, start, stop);
     //cout << genes.size() << " genes found\n";
     for (int i = 0; i < (int)genes.size(); i++) {
         const vector<gtfexon>& exons = genes[i]->exons();
@@ -1139,7 +1301,7 @@ void denovo_snp::initialize_buffer(const gtffile* gtf, int chromosome, int start
             int p5 = exons[j].position5();
             int p3 = exons[j].position3();
             if (p5 < start) p5 = start;
-            if (p3 >= end) p3 = end - 1;
+            if (p3 >= stop) p3 = stop - 1;
             for (int p = p5; p <= p3; p++) {
                 posbuffer[p - start] = 1;
             }
@@ -1147,7 +1309,7 @@ void denovo_snp::initialize_buffer(const gtffile* gtf, int chromosome, int start
     }
     // count 
     int length = 0;
-    for (int i = 0, span = end - start; i < span; i++) {
+    for (int i = 0, span = stop - start; i < span; i++) {
         if (posbuffer[i] != 0) {
             length++;
         }
@@ -1159,7 +1321,7 @@ void denovo_snp::initialize_buffer(const gtffile* gtf, int chromosome, int start
     _position = new int[length];
     _count1 = new int*[length];
     _count2 = new int*[length];
-    for (int i = 0, span = end - start, index = 0; i < span; i++) {
+    for (int i = 0, span = stop - start, index = 0; i < span; i++) {
         if (posbuffer[i] != 0) {
             _position[index] = i + start;
             _count1[index] = new int[4];
@@ -1173,31 +1335,48 @@ void denovo_snp::initialize_buffer(const gtffile* gtf, int chromosome, int start
     delete[] posbuffer;
 }
 
+void denovo_snp::set_quality(int qual) {
+    _quality = qual;
+}
+
 void denovo_snp::add_read(int slot, bam1_t const* read) throw (out_of_range) {
-    const uint32_t* cigar = bam1_cigar(read);
-    const uint8_t* sequence = bam1_seq(read);
+    uint32_t const* cigar = bam1_cigar(read);
+    uint8_t const* sequence = bam1_seq(read);
+    uint8_t const* qptr = bam1_qual(read);
     int len = read->core.n_cigar;
     int rpos = read->core.pos; // reference position
     int qpos = 0; // query position
     int offset = 4;
     if (slot != 0 && slot != 1) {
+        throw out_of_range("slot is 0 or 1");
     }
     int** count;
     if (slot == 0) {
         count = _count1;
+        _mapped1++;
     } else if (slot == 1) {
         count = _count2;
+        _mapped2++;
     } else {
         throw out_of_range("slot must be 0 or 1");
     }
 //    int 
+    bool flag = false;
+    static int base2index[16] = {-1,0,1,-1,2,-1,-1,-1,3,-1,-1,-1,-1,-1,-1,-1};
+    //static char base2nuc[16] = "0AC.G...T......";
+    //string seq = "";
+    //stringstream ss;
+    unsigned char qthr = _quality;
+    if (_quality >= 255) {
+        qthr = (unsigned char)255;
+    } else if (_quality < 0) {
+        qthr = 0;
+    }
     for (int i = 0; i < len; i++) {
         int op = bam_cigar_op(cigar[i]);
         int slen = bam_cigar_oplen(cigar[i]);
         if (op == BAM_CMATCH || op == BAM_CDIFF || op == BAM_CEQUAL) { // M
-//        if (op == BAM_CMATCH) {
             int index = -1;
-            //int index = get_index(rpos);
             for (int j = 0; j < slen; j++) {
                 if (index < 0) {
                     index = get_index(rpos);
@@ -1208,39 +1387,63 @@ void denovo_snp::add_read(int slot, bam1_t const* read) throw (out_of_range) {
                 }
                 if (index >= 0) {
                     uint8_t base = (sequence[qpos >> 1] >> offset) & 15;
-                    if (base == 1) { // A
-                        count[index][0] ++;
-                    } else if (base == 2) { // C
-                        count[index][1] ++;
-                    } else if (base == 4) { // G
-                        count[index][2] ++;
-                    } else if (base == 8) { // T
-                        count[index][3] ++;
-                    } 
+                    //cout << qpos << "\t" << (int)base << endl;
+                    int bi = base2index[base];
+                    if (index >= 0) {
+                        unsigned char qual = qptr[qpos];
+                        if (qual > qthr) {
+                            count[index][bi] ++;
+                            flag = true;
+                        }
+                    }
+                    //ss << base2nuc[base];
                 }
                 qpos++;
+                rpos++;
+                //offset = 4 - offset;
                 offset ^= 4;
             }
-//            ss << 'M';
-        } else if (op == BAM_CINS) {
-//            ss << 'I';
+        } else if (op == BAM_CINS) { // I
             qpos += slen;
             offset ^= ((slen & 1) << 2);
-        } else if (op == BAM_CDEL) {
+        } else if (op == BAM_CDEL) { // D
             rpos += slen;
-//            ss << 'D';
         } else {
             break;
+        }
+    }
+    //cout << ss.str() << endl;
+    if (flag) {
+        if (slot == 0) {
+            _mapped1++;
+        } else {
+            _mapped2++;
         }
     }
 }
 
 namespace {
     void find_major_alleles(int const* bases, int& b1, int& n1, int& b2, int& n2) {
+        n1 = bases[0];
+        b1 = 0;
+        n2 = 0;
+        b2 = 1;
+        for (int i = 1; i < 4; i++) {
+            int n = bases[i];
+            if (n > n2) {
+                if (n > n1) {
+                    n2 = n1; b2 = b1;
+                    n1 = n; b1 = i;
+                } else {
+                    n2 = n; b2 = i;
+                }
+            }
+            n = bases[i + 4];
+        }
     }
 }
 
-vector<polymorphic_allele> denovo_snp::get_polymorphism(int coverage, double heterogeneity) const {
+vector<polymorphic_allele> denovo_snp::get_polymorphism(int coverage, double hetero) const {
     vector<polymorphic_allele> alleles;
     for (int i = 0; i < _size; i++) {
         int b11, b12, b21, b22;
@@ -1251,14 +1454,58 @@ vector<polymorphic_allele> denovo_snp::get_polymorphism(int coverage, double het
         find_major_alleles(_count2[i], b21, n21, b22, n22);
         int c2 = n21 + n22;
         if (c2 < coverage) continue;
-        if ((c1 * heterogeneity < n12 && n22 == 0) 
-            || (c2 * heterogeneity < n22 && n12 == 0)) {
+        if ((c1 * hetero < n12 && n22 == 0) 
+            || (c2 * hetero < n22 && n12 == 0)) {
             alleles.push_back(polymorphic_allele(_chromosome, _position[i], _count1[i], _count2[i]));
         }
     }
     return alleles;
 }
 
+vector<polymorphic_allele> denovo_snp::get_polymorphism(int coverage, double heterogeneity, int start, int stop) const {
+    vector<polymorphic_allele> alleles;
+    for (int i = 0; i < _size; i++) {
+        int p = _position[i];
+        if (p < start) continue;
+        if (p > stop) break;
+        int b11, b12, b21, b22;
+        int n11, n12, n21, n22;
+        find_major_alleles(_count1[i], b11, n11, b12, n12);
+        int c1 = n11 + n12;
+        if (c1 < coverage) continue;
+        find_major_alleles(_count2[i], b21, n21, b22, n22);
+        int c2 = n21 + n22;
+        if (c2 < coverage) continue;
+        if ((c1 * heterogeneity < n12 && n22 == 0) 
+            || (c2 * heterogeneity < n22 && n12 == 0)) {
+            //cout << p << ":" << n11 << "," << n12 << " // " << n21 << "," << n22 << endl;
+            alleles.push_back(polymorphic_allele(_chromosome, _position[i], _count1[i], _count2[i]));
+        }
+    }
+    return alleles;
+}
+
+namespace {
+    string get_sample_name(string filename, char delimiter='/') {
+        int pos = 0;
+        for (int i = filename.size() - 1; i >= 0; i--) {
+            char c = filename.c_str()[i];
+            if (c == delimiter) {
+                pos = i + 1;
+                break;
+            }
+        }
+        int tail = filename.size();
+        for (int i = pos; i < (int)filename.size(); i++) {
+            char c = filename.c_str()[i];
+            if (c == '.') {
+                tail = i;
+                break;
+            }
+        }
+        return filename.substr(pos, tail - pos);
+    }
+}
 
 void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
     try {
@@ -1268,35 +1515,46 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
         const char* filename_gtf = get_argument_string(argc, argv, "G", NULL);
         const char* filename_chrm = get_argument_string(argc, argv, "s", NULL);
         int coverage = get_argument_integer(argc, argv, "c", 20);
-        double heterozygosity = get_argument_float(argc, argv, "z", 0.5);
+        double heterozygosity = get_argument_float(argc, argv, "z", 0.33);
         int chunk_size = get_argument_integer(argc, argv, "w",  200000);
         int margin_size = get_argument_integer(argc, argv, "m", 100000);
         int num_files = 2;
         int maximum_reads_in_window = get_argument_integer(argc, argv, "x", 0);
+        int quality_threshold = get_argument_integer(argc, argv, "q", 10);
         bool verbose = has_option(argc, argv, "verbose");
 
+        // if (filename_gtf == NULL || file_exists(filename_gtf) == false) {
+        //     throw logic_error("cannot open GTF file");
+        // }
         if (verbose) {
             cerr << "filename 1 : " << filename1 << endl;
             cerr << "filename 2 : " << filename2 << endl;
-            cerr << "gtf        : " << filename_gtf << endl;
+            cerr << "gtf        : " << (filename_gtf == NULL ? "none" : filename_gtf)  << endl;
             cerr << "heterozygosity : " << heterozygosity << endl;
             cerr << "coverage   : " << coverage << endl;
             cerr << "chunk size : " << chunk_size << endl;
             cerr << "margin     : " << margin_size << endl;
             cerr << "max reads  : " << maximum_reads_in_window << endl;
+            cerr << "quality    : " << quality_threshold << endl;
             cerr << "output     : " << (filename_output == NULL ? "stdout" : filename_output) << endl;
         }
 
         //cout << "GTF\n";
-        gtffile* gtf = gtffile::load_gtf(filename_gtf);
-
-        if (true) {
-            //cout << "test\n";
-            denovo_snp* snp = new denovo_snp(gtf, 1, 105000000, 119000000);
-            snp->set_scope(1, 115000000, 120000000);
-            delete snp;
-            return;
+        gtffile* gtf = NULL;
+        if (filename_gtf != NULL) {
+            gtffile::load_gtf(filename_gtf);
+            if (verbose) {
+                cerr << "GTF file " << gtf->size() << " genes\n";
+            }
         }
+
+        // if (true) {
+        //     //cout << "test\n";
+        //     denovo_snp* snp = new denovo_snp(gtf, 1, 105000000, 119000000);
+        //     snp->set_scope(1, 115000000, 120000000);
+        //     delete snp;
+        //     return;
+        // }
 
         ostream* ost = &cout;
         bamFile* bamfiles = new bamFile[num_files];
@@ -1339,6 +1597,9 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
                     hn += 3;
                 } 
                 int code = convert_chromosome_to_code(hn);
+                if (code < 0 || code > 128) {
+                    code = -1;
+                }
                 bc2cc[i] = code;
             }
         }
@@ -1346,14 +1607,23 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
         int next_chromosome = -1;
         int position = 0;
         int next_position = position + chunk_size;
-        int steps = 0;
-        vector<chromosome_seq*> chromosomes = chromosome_seq::load_genome(filename_chrm);
+        //int steps = 0;
+        vector<chromosome_seq*> chromosomes;
+
+        if (filename_chrm != NULL) {
+            chromosomes = chromosome_seq::load_genome(filename_chrm);
+        }
+
+        if (verbose) {
+            cerr << "set chromosome names\n";
+        }
         map<int,chromosome_seq const*> bam2chrm = chromosome_seq::map_chromosome(headers[0], chromosomes);
 
         denovo_snp* detector = NULL;
 
 //        bool debug = false;
-        
+        *ost << "CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t";
+        *ost << get_sample_name(filename1) << "\t" << get_sample_name(filename2) << endl;
         for (;;) {
             bool chromosome_change = false;
             bool finished = false;
@@ -1390,28 +1660,38 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
                     }
                     
                     if (detector == NULL) {
-                        int chromosome_code = 0;
-                        detector = new denovo_snp(gtf, chromosome_code, position - margin_size, position + chunk_size + margin_size);
+                        if (bc2cc.find(current_chromosome) != bc2cc.end()) {
+                            detector = new denovo_snp(gtf, bc2cc[current_chromosome], position - margin_size, position + chunk_size + margin_size);
+                            detector->set_quality(quality_threshold);
+                        }
                     }
                     
-                    if ((maximum_reads_in_window == 0 || detector->mapped() < maximum_reads_in_window) && detector->has_buffer()) {
+                    if ((maximum_reads_in_window == 0 || detector->mapped(i) < maximum_reads_in_window) && detector->has_buffer()) {
                         detector->add_read(i, r);
                     }
                     status[i] = 0;
                 }
             }
             
-            // detect gaps and insertions
-            if (current_chromosome >= 0) {
+            // detect sample specific SNPs
+            if (current_chromosome >= 0 && detector != NULL) {
+                //cerr << "analyzing " << current_chromosome << "       " << endl;
+                //cerr << headers[0]->target_name[0] << ", " << headers[0]->target_name[1] << ", " << endl;
                 if (verbose) {
-                    if (++steps % 1000 == 0) {
-                        cerr << " " << headers[0]->target_name[current_chromosome] << ":" << position << "-" << next_position << " ";
+                    if (true) {//++steps % 1 == 0) {
+                        cerr << " " << headers[0]->target_name[current_chromosome] << ":" << position << "-" << next_position;// << "   " << __LINE__;
                         //cerr << current_chromosome << ":" << position << "-" << next_position << " ";
-                        for (int i = 0; i < num_files; i++) {
-                            cerr << " " << i << ":";// << ;//detectors[i]->size();
+                        if (detector != NULL) {
+                            for (int i = 0; i < num_files; i++) {
+                                cerr << " " << i << ":" << detector->mapped(i);
+                            }
                         }
                         cerr << "     \r";
                     }
+                }
+                vector<polymorphic_allele> alleles = detector->get_polymorphism(coverage, heterozygosity, position, position + chunk_size);
+                for (int i = 0; i < (int)alleles.size(); i++) {
+                    *ost << alleles[i].to_string() << endl;
                 }
             }
 
@@ -1448,9 +1728,9 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
                     break;
                 }
             } else { // next position
-                for (int i = 0; i < num_files; i++) {
-                    //detectors[i]->sweep(current_chromosome, 0, next_position);// - margin_size);
-                }
+                // for (int i = 0; i < num_files; i++) {
+                //     //detectors[i]->sweep(current_chromosome, 0, next_position);// - margin_size);
+                // }
                 int pos_min = numeric_limits<int>::max();
                 for (int i = 0; i < num_files; i++) {
                     pair<int,int> span;// = detectors[i]->span();

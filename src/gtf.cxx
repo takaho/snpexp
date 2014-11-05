@@ -224,6 +224,9 @@ void gtffile::sort_genes() {
 }
 
 gtffile* gtffile::load_gtf(const char* filename) throw (exception) {
+    if (tktools::io::file_exists(filename) == false) {
+        throw logic_error(string("cannot open ") + filename);
+    }
     gtffile* data = new gtffile();
     ifstream fi(filename);
     while (!fi.eof()) {
