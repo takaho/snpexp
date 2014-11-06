@@ -1057,80 +1057,99 @@ void denovo_snp::release_buffer() {
 }
 
 void denovo_snp::set_scope_without_gtf(int chromosome, int start, int stop) {
-    if (chromosome == _chromosome && _start <= stop && start <= _stop) { // bind
-        int minpos = _start < start ? _start : start;
-        int maxpos = _stop > stop ? _stop : stop;
+    if (chromosome != _chromosome || _stop < start || _start > stop || _reserved == 0) {
+        release_buffer();
+        initialize_buffer(chromosome, start, stop);
+        return;
+    }
 
-        if (maxpos - minpos <= _reserved) {
-            for (int i = 0; i < maxpos - minpos; i++) {
-                _position[i] = minpos + i;
-            }
-            if (_start < start) {
-                // ------    current
-                //   ------  next
-                int offset = start - _start;
-                for (int i = 0, j = offset; j < _stop - _start; i++, j++) {
-                    memcpy(_count1 + i, _count1 + j, sizeof(int) * 4);
-                    memcpy(_count2 + i, _count2 + j, sizeof(int) * 4);
-                }
-                for (int i = _size - offset; i < stop - start; i++) {
-                    for (int j = 0; j < 4; j++) {
-                        _count1[i][j] = _count2[i][j] = 0;
-                    }
-                }
-            } else {
-                //   ------
-                // ------
-                int offset = _start - start;
-                for (int i = stop - start - 1, j = (_stop - _start - 1) - offset; j >= 0; i--, j--) {
-                    memcpy(_count1 + i, _count1 + j, sizeof(int) * 4);
-                    memcpy(_count2 + i, _count2 + j, sizeof(int) * 4);
-                }
-                for (int i = 0; i < offset; i++) {
-                    for (int j = 0; j < 4; j++) {
-                        _count1[i][j] = _count2[i][j] = 0;
-                    }
-                }
-            }
-            _start = start;
-            _stop = stop;
-            _size = stop - start;
-            _mapped1 = _mapped2 = 0;
-            return;
+    //int minpos = _start < start ? _start : start;
+    //int maxpos = _stop > stop ? _stop : stop;
+    //cerr << _reserved << ", " << minpos << "-" << maxpos << ", " << (maxpos - minpos) << endl;
+    //cerr << _start << "-" << _stop << " => " << start << "-" << stop << endl;
+    if (stop - start <= _reserved) {//maxpos - minpos <= _reserved) {
+        for (int i = 0; i < stop - start; i++) {
+            _position[i] = start + i;
         }
-
+        if (_start < start) {
+            // ------    current
+            //   ------  next
+            int offset = start - _start;
+            for (int i = 0, j = offset; j < _stop - _start; i++, j++) {
+                // for (int k = 0; k < 4; k++) {
+                //     _count1[i][k] = _count1[j][k];
+                //     _count2[i][k] = _count2[j][k];
+                // }
+                memcpy(_count1[i], _count1[j], sizeof(int) * 4);
+                memcpy(_count2[i], _count2[j], sizeof(int) * 4);
+            }
+            //cerr << "clear " << _size - offset << ", " << (stop - start) << endl;
+            for (int i = _size - offset; i < stop - start; i++) {
+                //cerr << "clear at " << i << " / " << _size << " : " << hex << (void*)_count1[i] << ", " << (void*)_count2[i] << dec << endl;
+                for (int j = 0; j < 4; j++) {
+                    _count1[i][j] = _count2[i][j] = 0;
+                }
+            }
+        } else {
+            //   ------
+            // ------
+            int offset = _start - start;
+            for (int i = stop - start - 1, j = (_stop - _start - 1) - offset; j >= 0; i--, j--) {
+                memcpy(_count1[i], _count1[j], sizeof(int) * 4);
+                memcpy(_count2[i], _count2[j], sizeof(int) * 4);
+            }
+            for (int i = 0; i < offset; i++) {
+                for (int j = 0; j < 4; j++) {
+                    _count1[i][j] = _count2[i][j] = 0;
+                }
+            }
+        }
+        _start = start;
+        _stop = stop;
+        _size = stop - start;
+        _mapped1 = _mapped2 = 0;
+        return;
+    } else {
+        //cerr << 
         delete[] _position;
         int** cbuf1 = _count1;
         int** cbuf2 = _count2;
         int offset = 0;
         int span = _size;
-        //cout << "CURRENT SIZE = " << _size << endl;
+        //cout << "SIZE = " << _size << " => " << stop - start << endl;
         if (_start > start) {
             offset = _start - start;
         }
-        initialize_buffer(chromosome, minpos, maxpos);
+        int ps = _start;
+        initialize_buffer(chromosome, start, stop);
         //cout << "REVISED SIZE = " << _size << endl;
         if (span > _size - offset) {
             span = _size - offset;
         }
         //cout << span << endl;
         for (int i = 0; i < span; i++) {//begin; i < tail; i++) {
-            int* c1 = _count1[i + offset];
-            int* c2 = _count2[i + offset];
-            for (int j = 0; j < 4; j++) {
-                c1[j] = cbuf1[i][j];
-                c2[j] = cbuf2[i][j];
+            int pos = ps + i;
+            if (_start <= pos && pos < _stop) {
+                int index = pos - _start;
+                //cerr << index << endl;
+                memcpy(_count1 + index, cbuf1 + i, sizeof(int) * 4);
+                memcpy(_count2 + index, cbuf2 + i, sizeof(int) * 4);
             }
             delete[] cbuf1[i];
             delete[] cbuf2[i];
         }
+        //     int* c1 = _count1[i + offset];
+        //     int* c2 = _count2[i + offset];
+        //     for (int j = 0; j < 4; j++) {
+        //         c1[j] = cbuf1[i][j];
+        //         c2[j] = cbuf2[i][j];
+        //     }
+        //     delete[] cbuf1[i];
+        //     delete[] cbuf2[i];
+        // }
         delete[] cbuf1;
         delete[] cbuf2;
-
-    } else {
-        release_buffer();
-        initialize_buffer(chromosome, start, stop);
-    } 
+    }
 }
 
 void denovo_snp::set_scope(int chromosome, int start, int stop) {
@@ -1138,6 +1157,7 @@ void denovo_snp::set_scope(int chromosome, int start, int stop) {
     if (_genes == NULL) {
         //cerr << __func__ << endl;
         set_scope_without_gtf(chromosome, start, stop);
+        return;
     }
     if (_chromosome != chromosome || _size == 0) {
         release_buffer();
@@ -1271,7 +1291,6 @@ void denovo_snp::initialize_buffer_without_gtf(int chromosome, int start, int st
     if (stop < start) {
         throw logic_error("start >= stop");
     }
-    //cerr << "initializing without genes\n";
     _genes = NULL;
     _chromosome = chromosome;
     _start = start;
@@ -1281,7 +1300,6 @@ void denovo_snp::initialize_buffer_without_gtf(int chromosome, int start, int st
     for (int i = 0; i < _size; i++) {
         _position[i] = i + start;
     }
-    //cerr << "SIZE is " << _size << endl;
     _count1 = new int*[_size];
     _count2 = new int*[_size];
     for (int i = 0; i < _size; i++) {
@@ -1646,9 +1664,9 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
             chromosomes = chromosome_seq::load_genome(filename_chrm);
         }
 
-        if (verbose) {
-            cerr << "set chromosome names\n";
-        }
+        // if (verbose) {
+        //     cerr << "set chromosome names\n";
+        // }
         map<int,chromosome_seq const*> bam2chrm = chromosome_seq::map_chromosome(headers[0], chromosomes);
 
         denovo_snp* detector = NULL;
@@ -1727,7 +1745,7 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
                 if (detector != NULL) {
                     vector<polymorphic_allele> alleles = detector->get_polymorphism(coverage, heterozygosity, position, position + chunk_size);
                     for (int i = 0; i < (int)alleles.size(); i++) {
-                        *ost << alleles[i].to_string() << endl;
+                        *ost << alleles[i].to_string() << endl << flush;
                     }
                 }
             }
