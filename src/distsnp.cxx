@@ -1046,11 +1046,10 @@ denovo_snp::~denovo_snp() {
 }
 
 void denovo_snp::release_buffer() {
-    if (_count1 != NULL) {
-        for (int i = 0; i < _reserved; i++) {
-            delete[] _count1[i];
-            delete[] _count2[i];
-        }
+    //if (_count1 != NULL) {
+    for (int i = 0; i < _reserved; i++) {
+        delete[] _count1[i];
+        delete[] _count2[i];
     }
     delete[] _count1;
     delete[] _count2;
@@ -1061,6 +1060,44 @@ void denovo_snp::set_scope_without_gtf(int chromosome, int start, int stop) {
     if (chromosome == _chromosome && _start <= stop && start <= _stop) { // bind
         int minpos = _start < start ? _start : start;
         int maxpos = _stop > stop ? _stop : stop;
+
+        if (maxpos - minpos <= _reserved) {
+            for (int i = 0; i < maxpos - minpos; i++) {
+                _position[i] = minpos + i;
+            }
+            if (_start < start) {
+                // ------    current
+                //   ------  next
+                int offset = start - _start;
+                for (int i = 0, j = offset; j < _stop - _start; i++, j++) {
+                    memcpy(_count1 + i, _count1 + j, sizeof(int) * 4);
+                    memcpy(_count2 + i, _count2 + j, sizeof(int) * 4);
+                }
+                for (int i = _size - offset; i < stop - start; i++) {
+                    for (int j = 0; j < 4; j++) {
+                        _count1[i][j] = _count2[i][j] = 0;
+                    }
+                }
+            } else {
+                //   ------
+                // ------
+                int offset = _start - start;
+                for (int i = stop - start - 1, j = (_stop - _start - 1) - offset; j >= 0; i--, j--) {
+                    memcpy(_count1 + i, _count1 + j, sizeof(int) * 4);
+                    memcpy(_count2 + i, _count2 + j, sizeof(int) * 4);
+                }
+                for (int i = 0; i < offset; i++) {
+                    for (int j = 0; j < 4; j++) {
+                        _count1[i][j] = _count2[i][j] = 0;
+                    }
+                }
+            }
+            _start = start;
+            _stop = stop;
+            _size = stop - start;
+            _mapped1 = _mapped2 = 0;
+            return;
+        }
 
         delete[] _position;
         int** cbuf1 = _count1;
