@@ -47,6 +47,7 @@ namespace tkbio {
             _quality_threshold = thr;
         }
         virtual void set_display_mode(int mode) throw (std::invalid_argument);
+        virtual string to_string() const;
         //static void remove_outside_exons(vector<recfragmentgtffile const* gtf, chromosome_seq count* chromosome, int start, int end) throw (exception);
     };
 
@@ -108,6 +109,27 @@ namespace tkbio {
                                        chromosome_seq const* chromosome,
                                        int start, int end, ostream& ost) throw (exception);
 
+    };
+
+    class strain_estimator : public fragment_processor {
+        int _coverage;
+        int _num_strains;
+        int** _matrix;
+        float _hetero_thr;
+    private:
+        void initialize_matrix(dbsnp_file const* vardb);
+    public:
+        strain_estimator() throw (exception);
+        strain_estimator(dbsnp_file const* vardb) throw(exception);
+        ~strain_estimator();
+        void set_coverage(int cov) { _coverage = cov; }
+        int coverage() const { return _coverage; }
+        float heterozygosity() const { return _hetero_thr; }
+        void set_heterozygosity(float h) { _hetero_thr = h; }
+        virtual void process_fragments(const vector<recfragment*>& fragments,
+                                       chromosome_seq const* chromosome,
+                                       int start, int end, ostream& ost) throw (exception);
+        virtual string to_string() const;
     };
 }
 

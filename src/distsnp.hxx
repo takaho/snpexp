@@ -98,19 +98,19 @@ namespace tkbio {
         const string& cached_chromosome() const { return _cache_chromosome; }
         std::pair<int,int> cached_range() const { return std::make_pair(_cache_range_start, _cache_range_end); }
         vector<dbsnp_locus const*> get_snps(string chromosome, int start, int end) const throw (exception);
-      int get_strain_index(const string& strain) const;
-      vector<string> get_strain() const { return _strains; }
-      dbsnp_locus const* get_snp(const string& chromosome, int position) const;
+        int get_strain_index(const string& strain) const;
+        vector<string> get_strain() const { return _strains; }
+        dbsnp_locus const* get_snp(const string& chromosome, int position) const;
         void add_file_position(const string& chrom, size_t pos, size_t fpos) {
             _indicators.push_back(new cache_position(chrom, pos, fpos));
         }
         static dbsnp_file* load_dbsnp(const char* filename, bool force_uncached=false) throw (exception);
     };
 
-  class snp_distance {
-  public:
-    static void main(int argc, char** argv) throw (exception);
-  };
+    class snp_distance {
+    public:
+        static void main(int argc, char** argv) throw (exception);
+    };
 
     class gtffile;
     class denovo_snp;
