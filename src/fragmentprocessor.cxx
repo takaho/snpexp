@@ -751,6 +751,9 @@ void strain_estimator::process_fragments(const vector<recfragment*>& fragments,
                 //if (observed_genotype > 0) {
                 //if (observed_genotype > 0) {
                 _matrix[index][db1 + db2 + observed_genotype]++;
+                // if (index == 0 && db1 + db2 + observed_genotype == 8) {
+                //     cout << chromosome->name() << "\t" << position << "\t" << (position + 1) << endl;
+                // }
                 // }
                 //     if (observed_genotype > 0) {
                 //         //cerr << index << ", " << observed_genotype << " / " << db1 << " / " << db2 << endl;
