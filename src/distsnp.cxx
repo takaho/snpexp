@@ -1485,7 +1485,8 @@ vector<polymorphic_allele> denovo_snp::get_polymorphism(int coverage, double het
         int c2 = n21 + n22;
         if (c2 < coverage) continue;
         if ((c1 * hetero < n12 && n22 == 0) 
-            || (c2 * hetero < n22 && n12 == 0)) {
+            || (c2 * hetero < n22 && n12 == 0)
+            || (n22 == 0 && n12 == 0 && b11 != b21)) {
             alleles.push_back(polymorphic_allele(_chromosome, _position[i], _count1[i], _count2[i]));
         }
     }
@@ -1670,6 +1671,7 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
         map<int,chromosome_seq const*> bam2chrm = chromosome_seq::map_chromosome(headers[0], chromosomes);
 
         denovo_snp* detector = NULL;
+        set<int> touched_chromosome;
 
 //        bool debug = false;
         *ost << "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t";
@@ -1697,6 +1699,11 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
                     int pos = r->core.pos;
                     
                     if (chrm != current_chromosome) {
+                        if (touched_chromosome.find(chrm) != touched_chromosome.end()) {
+                            //cerr << "touched " << i << "\n";
+                            status[i] = 0;
+                            continue;
+                        }
                         chromosome_change = true;
                         if (next_chromosome <= 0) {
                             next_chromosome = chrm;
@@ -1755,6 +1762,7 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
             }
 
             if (chromosome_change) {
+                touched_chromosome.insert(current_chromosome);
                 int pos_min = numeric_limits<int>::max();
                 if (verbose) {
                     int total_reads = 0;

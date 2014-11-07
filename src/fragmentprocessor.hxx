@@ -41,7 +41,7 @@ namespace tkbio {
                                        int start, int end, ostream& ost) throw (exception) = 0;
         virtual void set_gtf(gtffile const* gtf) throw (exception) { _gtffile = gtf; }
         gtffile const* get_gtf() const { return _gtffile; }
-        void set_vcf(dbsnp_file const* vardb) { _variation_db = vardb; }
+        virtual void set_vcf(dbsnp_file const* vardb) { _variation_db = vardb; }
         dbsnp_file const* get_vcf() const { return _variation_db; }
         void set_quality_threshold(unsigned char thr) {
             _quality_threshold = thr;
@@ -126,6 +126,7 @@ namespace tkbio {
         int coverage() const { return _coverage; }
         float heterozygosity() const { return _hetero_thr; }
         void set_heterozygosity(float h) { _hetero_thr = h; }
+        virtual void set_vcf(dbsnp_file const* vardb);
         virtual void process_fragments(const vector<recfragment*>& fragments,
                                        chromosome_seq const* chromosome,
                                        int start, int end, ostream& ost) throw (exception);

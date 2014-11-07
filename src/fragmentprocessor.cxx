@@ -613,18 +613,38 @@ namespace {
 }
 void strain_estimator::initialize_matrix(dbsnp_file const* vardb) {
     _variation_db = vardb;
-    _num_strains = _variation_db->strain_size();
+    _num_strains = _variation_db->strain_size() + 1;
     int matsize = _num_strains * (_num_strains - 1) / 2;
+    //cerr << _num_strains << " strains included " << matsize << "\n";
     _matrix = new int*[matsize];
-    int index = 0;
-    for (int i = 0; i < _num_strains; i++) {
-        for (int j = 0; j < i; j++) {
-            _matrix[index] = new int[STRAIN_GROUPS];
-            for (int k = 0; k < STRAIN_GROUPS; k++) {
-                _matrix[index][k] = 0;
-            }
+    //cerr << matsize << endl;
+
+    //int index = 0;
+    for (int i = 0; i < matsize; i++) {
+//    for (int i = 0; i < _num_strains; i++) {
+//        for (int j = -1; j < i; j++) {
+        _matrix[i] = new int[STRAIN_GROUPS];
+        for (int j = 0; j < STRAIN_GROUPS; j++) {
+            _matrix[i][j] = 0;
         }
     }
+    //         _matrix[index] = new int[STRAIN_GROUPS];
+    //         for (int k = 0; k < STRAIN_GROUPS; k++) {
+    //             _matrix[index][k] = 0;
+    //         }
+    //         index++;
+    //     }
+    // }
+    cerr << _num_strains << " strains, " << matsize << " elements " << endl;
+}
+
+void strain_estimator::set_vcf(dbsnp_file const* vardb) {
+    for (int i = 0; i < _num_strains * (_num_strains - 1) / 2; i++) {
+        delete[] _matrix[i];
+    }
+    delete[] _matrix;
+    initialize_matrix(vardb);
+    _variation_db = vardb;
 }
 
 strain_estimator::~strain_estimator() {
@@ -641,19 +661,25 @@ void strain_estimator::process_fragments(const vector<recfragment*>& fragments,
                                          chromosome_seq const* chromosome,
                                          int start, int end, ostream& ost) throw (exception) {
 
-
+    //cerr << "data\n";
     vector<dbsnp_locus const*> snps = _variation_db->get_snps(chromosome->name(), start, end);
+    //cerr << snps.size() << endl;
+    if (snps.size() == 0) return;
     //int num_slots = _num_strains * (_num_strains - 1) / 2;
     //int* indices = new int[num_slots];
     //for (int i = 0; i < num_slots; i++) indices[i] = -1;
     float thr_lower = 0.05f;
     float thr_upper = 1.0f - thr_lower;
+    //bool changed = false;
+    //int n00 = 0, n01 = 0, n11 = 0;
     for (int i = 0; i < (int)snps.size(); i++) {
         // get nucleotide and reject non-standards
-        int refid = hetero_locus::get_base_id(snps[i]->reference());
-        int altid = hetero_locus::get_base_id(snps[i]->alternative());
+        dbsnp_locus const* snp = snps[i];
+        int refid = hetero_locus::get_base_id(snp->reference());
+        int altid = hetero_locus::get_base_id(snp->alternative());
         if (refid < 0 || altid < 0) continue;
-        
+        //cerr << i << ":" << refid << ", " << altid << endl;
+
         // count bases and reject few coverage
         int position = snps[i]->position();
         if (position < start || position >= end) continue;
@@ -672,74 +698,130 @@ void strain_estimator::process_fragments(const vector<recfragment*>& fragments,
         if (freq[refid] + freq[altid] < _coverage) continue;
         float ratio = (float)freq[altid] / (freq[refid] + freq[altid]);
 
-        int group = 0;
-        if (ratio < thr_lower) { // ref/ref
-            group = 0;
-        } else if (ratio >= thr_upper) { // alt/alt
-            group = 2; 
-        } else {
-            group = 1;
+        int observed_genotype = 0;
+        if (ratio > thr_upper) {
+            observed_genotype = 2;
+        } else if (ratio >= thr_lower) {
+            observed_genotype = 1;
         }
+         // if (observed_genotype > 0) {
+         //     cerr << position << " : " << observed_genotype << " " << ratio << endl;
+         //     cerr << freq[0] << ":" << freq[1] << ":" << freq[2] << ":" << freq[3] << endl;
+         // }
+    //     if (ratio < thr_lower) { // ref/ref
+    //         n00 ++;
+    //         //group = 0;
+    //     } else if (ratio >= thr_upper) { // alt/alt
+    //         n01 ++;
+    //         //group = 2; 
+    //     } else {
+    //         n11 ++;
+    //         //group = 1;
+    //     }
+    // }
         //if (total < _coverage) continue;
 
         //
-        int num = 0;
-        for (int j = 0; j < _num_strains; j++) {
-            unsigned char g1 = snps[i]->get_genotype(j);
-            int index = 0;
-            if (g1 == (unsigned char)0x00) {
-                index = 0;
-            } else if (g1 == (unsigned char)0x11) {
-                index = 6;
-            } else{
-                index = -1;
+        int index = 0;
+        for (int j = 0; j < _num_strains - 1; j++) {
+            unsigned char g1 = snp->get_genotype(j);
+            int db1 = 0;
+            if (g1 == 0x11) {
+                db1 = 0;
+            } else if (g1 == (unsigned char)0x22) {
+                db1 = 6;
+            } else { // not ref nor alt
+                index += j + 1;
                 continue;
             }
-            for (int k = 0; k < j; k++) {
-                unsigned char g2 = snps[i]->get_genotype(k);
-                if (g2 == (unsigned char)0x00) {
-                    //
-                } else if (g2 == (unsigned char)0x11) {
-                    index += 3;
-                } else{
-                    index = -1;
-                    continue;
+            for (int k = -1; k < j; k++) {
+                int db2 = 0;
+                unsigned char g2;
+                if (k < 0) {
+                    g2 = 0;
+                } else {
+                    g2 = snp->get_genotype(k);
+                    if (g2 == (unsigned char)0x22) {
+                        db2 = 3;//db_genotype += 3;
+                    } else if (g2 != (unsigned char)0x11) {
+                        index ++;
+                        continue;
+                    }
                 }
-                _matrix[num++][index + group] ++;
-                //indices[num++] = index;
+                //if (observed_genotype > 0) {
+                //if (observed_genotype > 0) {
+                _matrix[index][db1 + db2 + observed_genotype]++;
+                // }
+                //     if (observed_genotype > 0) {
+                //         //cerr << index << ", " << observed_genotype << " / " << db1 << " / " << db2 << endl;
+                //         changed = true;
+                //     }
+                // }
+                index++;
             }
         }
+        //if (changed) cerr << index << endl;
     }
+
+//    }
+    // if (changed) {
+    //     cout << to_string() << endl;
+    // }
 //    delete[] indices;
 }
 
 string strain_estimator::to_string() const {
     stringstream ss;
-    ss << "#Strain1\tStrain2";
+    ss << "#ST1\tST2";
     for (int i = 0; i < STRAIN_GROUPS; i++) {
         ss << "\t";
         ss << (i / 6) << "/" << ((i / 3) % 2) << ":";
         switch (i % 3) {
         case 0:
-            ss << "0/0"; break;
+            ss << "AA"; break;
         case 1:
-            ss << "0/1"; break;
+            ss << "Aa"; break;
         case 2:
-            ss << "1/1"; break;
+            ss << "aa"; break;
         }
     }
     ss << endl;
+    //cerr << ss.str() << " // " << _num_strains << endl;
     int index = 0;
-    for (int i = 0; i < _num_strains; i++) {
-        ss << _variation_db->get_strain(i);
-        for (int j = 0; j < i; j++) {
-            ss << "\t" << _variation_db->get_strain(j);
-            for (int k = 0; k < STRAIN_GROUPS; k++) {
-                ss << "\t" << _matrix[index][k];
+    for (int i = 0; i < _num_strains - 1; i++) {
+        //cerr << index << ", " << i << ", " << _num_strains;
+        //cerr << " : " << _variation_db->get_strain(i) << endl;
+        string si = _variation_db->get_strain(i);
+        //ss << 
+        for (int j = -1; j < i; j++) {
+            string sj;
+            if (j < 0) {
+                sj = "C57BL6J";
+            } else {
+                sj = _variation_db->get_strain(j);
             }
+            //cerr << index << " :: " << si << " / " << sj << endl;//" " << hex << (void*)_matrix[index] << dec << endl;
+            ss << si << "\t" << sj;
+            for (int k = 0; k < STRAIN_GROUPS; k++) {
+                int value = _matrix[index][k];
+                ss << "\t";
+                // if (value > 1000000) {
+                //     ss << (value / 1000000) << "M";
+                // } else if (value > 1000) {
+                //     ss << (value / 1000) << "K";
+                // } else {
+                //     ss << value;
+                // }
+                ss << value;
+                //ss << "\t" << _matrix[index][k];
+            }
+            //cerr << index << endl;
             ss << endl;
             index++;
+            //cerr << hex << (void*)(_matrix + index) << hex << endl;
         }
     }
     return ss.str();
 }
+
+

@@ -235,15 +235,15 @@ int main(int argc, char** argv) {
             throw invalid_argument("no genomic sequence given");
         }
 
-	if (mode == 2) {
-            try {
-                snp_distance::main(argc, argv);
-                return 0;
-            } catch (exception& e) {
-                cerr << "error while mode 2\n";
-                throw;
-            }
-	}
+	// if (mode == 2) {
+        //     try {
+        //         snp_distance::main(argc, argv);
+        //         return 0;
+        //     } catch (exception& e) {
+        //         cerr << "error while mode 2\n";
+        //         throw;
+        //     }
+	// }
 
         for (int i = 2; i < argc; i++) {
             if (argv[i][0] != '-' && tktools::io::file_exists(argv[i]) && strcmp(argv[i] + strlen(argv[i]) - 4, ".bam") == 0) {
@@ -431,6 +431,9 @@ second
         // 0x80   : reach end
         bool skipping = false;
         bool chromosome_not_included = false;
+
+        //int counter = 0;
+
         while (true) {
             int num_chr_finish = 0;
             vector<recfragment*> fragments;
@@ -527,7 +530,9 @@ second
                 }
             }
 
+
             if ((int)fragments.size() > coverage && chromosome != NULL) {
+                //cerr << "analyze " << __LINE__ << endl;
                 // integrate pairs
                 if (paired) {
                     recfragment::bundle_pairs(fragments);
@@ -545,6 +550,10 @@ second
                         cerr << " // " << range.first << "," << range.second;
                     }
                     cerr << "       \r";
+
+                    // if (++counter % 1000 == 0) {
+                    //     cerr << "\n" << processor->to_string() << endl;
+                    // }
                 }
                 if (!chromosome_not_included) {
                     processor->process_fragments(fragments, chromosome, analysis_start, analysis_end, *ost);
@@ -566,7 +575,9 @@ second
                     break;
                 }
                 if (verbose) {
+
                     cerr << "change chrom " << headers[0]->target_name[next_chr] << "     " << endl;
+                    cerr << processor->to_string();
                 }
                 current_bamchrm = next_chr;
                 
@@ -636,6 +647,7 @@ second
         if (verbose) {
             cerr << "finish processing\n";
         }
+        *ost << processor->to_string();
 
         // close output file
         if (filename_output != NULL) {
