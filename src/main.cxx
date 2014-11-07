@@ -206,11 +206,11 @@ int main(int argc, char** argv) {
         if (mode == 5) {
             try {
                 denovo_snp::enumerate_hetero(argc, argv);
+                return 0;
             } catch (exception& e) {
                 throw;
             }
         }
-        exit(0);
 
         if (mode == 4) {
             try {
@@ -298,7 +298,14 @@ int main(int argc, char** argv) {
         //     str_detector* _proc = new str_detector(coverage, heterozygosity);
         //     _proc->set_display_mode(display_mode);
         //     processor = _proc;
+        } else if (mode == 2) {
+            strain_estimator* _proc = new strain_estimator();
+            _proc->set_coverage(coverage);
+            _proc->set_heterozygosity(heterozygosity);
+            processor = _proc;
+            dynamic_cast<strain_estimator*>(processor)->to_string();
         }
+
         if (processor == NULL) {
             throw invalid_argument("no effective mode");
         }
