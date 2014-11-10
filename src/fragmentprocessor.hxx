@@ -132,6 +132,7 @@ namespace tkbio {
                                        int start, int end, ostream& ost) throw (exception);
         virtual string to_string() const;
     };
+
 }
 
 

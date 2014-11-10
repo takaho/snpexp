@@ -47,7 +47,7 @@ namespace tkbio {
         const chromosome_seq& operator = (const chromosome_seq& rhs);
         chromosome_seq(const chromosome_seq& rhs);
         void load_sequence_from_cache() throw (exception);
-        static vector<chromosome_seq*> load_from_cache(const char* filename) throw (exception);
+        static vector<chromosome_seq*> load_from_cache(const char* filename, char const* filename_fasta) throw (exception);
         static void save_cache(const char* filename, const vector<chromosome_seq*>& chromosomes) throw (exception);
         static string get_cache_filename(const char* filename);
     public:

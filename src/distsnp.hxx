@@ -141,6 +141,26 @@ namespace tkbio {
         friend bool operator == (const polymorphic_allele& lhs, const polymorphic_allele& rhs);
     };
 
+    class allele_count {
+    public:
+        int homo_homo;
+        int homo_hetero;
+        int hetero_homo;
+        int hetero_hetero;
+        int hetero_hetero_diff;
+        int uncountable;
+        allele_count() {
+            homo_homo = 0;
+            homo_hetero = 0;
+            hetero_homo = 0;
+            hetero_hetero = 0;
+            hetero_hetero_diff = 0;
+            uncountable = 0;
+        }
+        double homozygosity(bool whole=true) const;
+        string to_string() const;
+    };
+
     class denovo_snp {
         const gtffile* _genes;
         int _chromosome;
@@ -179,8 +199,9 @@ namespace tkbio {
         void set_scope_without_gtf(int chromosome, int start, int stop);
         
         polymorphic_allele get_allele(int position) const;
-        vector<polymorphic_allele> get_polymorphism(int coverage, double heterogeneity) const;///, double tolerance=0.0) const;
-        vector<polymorphic_allele> get_polymorphism(int coverage, double heterogeneity, int start, int stop) const;///, double tolerance=0.0) const;
+        vector<polymorphic_allele> get_polymorphism(int coverage, double hetero_threshold) const;///, double tolerance=0.0) const;
+        vector<polymorphic_allele> get_polymorphism(int coverage, double hetero_threshold, int start, int stop) const;///, double tolerance=0.0) const;
+        allele_count count_allele_types(int coverage, double heterozygosity, int start, int stop, chromosome_seq const* chromosome) const;
         //void add(in position, );
         //void clear();
         std::string to_string() const;

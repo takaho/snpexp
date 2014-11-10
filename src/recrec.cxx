@@ -536,7 +536,7 @@ namespace {
 }
 
 int chromosome_seq::get_base_id(int pos) const {
-    unsigned char code = _sequence[pos >> 1] >> ((pos & 1) == 0 ? 4 : 0) & 0x0f;
+    unsigned char code = get_base_code(pos);//_sequence[pos >> 1] >> ((pos & 1) == 0 ? 4 : 0) & 0x0f;
     return _base_identifiers[code];
 }
 
@@ -670,7 +670,7 @@ void chromosome_seq::save_cache(const char* filename, const vector<chromosome_se
     fo.close();
 }
 
-vector<chromosome_seq*> chromosome_seq::load_from_cache(const char* filename) throw (exception) {
+vector<chromosome_seq*> chromosome_seq::load_from_cache(const char* filename, char const* filename_org) throw (exception) {
     vector<chromosome_seq*> seqs;
     ifstream fi(filename);
     if (fi.is_open() == false) {
@@ -683,6 +683,7 @@ vector<chromosome_seq*> chromosome_seq::load_from_cache(const char* filename) th
     }
     int num;
     fi.read(reinterpret_cast<char*>(&num), sizeof(int));
+    string filename_prev;
     for (int i = 0; i < num; i++) {
         chromosome_seq* seq = new chromosome_seq();;
         int slen;
@@ -700,7 +701,13 @@ vector<chromosome_seq*> chromosome_seq::load_from_cache(const char* filename) th
         fi.read(reinterpret_cast<char*>(&slen), sizeof(int));
         buffer = new char[slen];
         fi.read(buffer, sizeof(char) * slen);
-        seq->_filename = buffer;
+        //cerr << strlen(buffer) << " " << buffer << "  " << __func__ << " " << __LINE__ << endl;
+        if (strlen(buffer) > 0) {
+            seq->_filename = buffer;
+            filename_prev = buffer;
+        } else {
+            seq->_filename = filename_org;
+        }
         delete[] buffer;
         fi.read(reinterpret_cast<char*>(&(seq->_data_start)), sizeof(size_t));
         fi.read(reinterpret_cast<char*>(&(seq->_data_end)), sizeof(size_t));
@@ -713,6 +720,7 @@ vector<chromosome_seq*> chromosome_seq::load_from_cache(const char* filename) th
 
 
 void chromosome_seq::load_sequence_from_cache() throw (exception) {
+    cerr << "FILENAME" << _filename << endl;
     ifstream fi(_filename.c_str());
     if (fi.is_open() == false) {
         throw invalid_argument("cannot open genome sequence: " + _filename);
@@ -757,7 +765,7 @@ vector<chromosome_seq*> chromosome_seq::load_genome(const char* filename) throw 
     string filename_cache = get_cache_filename(filename);
     if (tktools::io::file_exists(filename_cache.c_str())) {
         try {
-            return load_from_cache(filename_cache.c_str());
+            return load_from_cache(filename_cache.c_str(), filename);
         } catch (exception& e) {
             cerr << e.what() << endl;
             cerr << "discard current cache file\n";
