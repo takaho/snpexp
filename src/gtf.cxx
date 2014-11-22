@@ -42,14 +42,21 @@ using namespace std;
 using namespace tkbio;
 using namespace tktools::bio;
 
+
+string* gtfexon::_features = NULL;
+const int gtfexon::_num_features = 10;
 namespace {
     string* generate_feature_array() {
-        string* _features = new string[5];
+        string* _features = new string[10];
         _features[gtfexon::OTHERS] = string(".");
         _features[gtfexon::EXON] = "exon";
         _features[gtfexon::CDS] = "CDS";
         _features[gtfexon::START_CODON] = "start_codon";
         _features[gtfexon::STOP_CODON] = "stop_codon";
+        _features[gtfexon::UTR] = "UTR";
+        _features[gtfexon::transcript] = "transcript";
+        _features[gtfexon::gene] = "gene";
+        _features[gtfexon::Selenocystein] = "Selenocystein";
         return _features;
     }
 }
@@ -76,22 +83,21 @@ namespace {
 
 gtfexon::Feature gtfexon::encode_feature(const char* feature) {
     if (_features == NULL) {
+        //cerr << "instanciate _features\n";
         _features = generate_feature_array();
     }
     for (int i = 1; i < _num_features; i++) {
+        //cerr << i << " : " << _features[i] << endl;
         if (strncmp(feature, _features[i].c_str(), _features[i].size()) == 0) {
             return (Feature)i;
         }
     }
     if (_others.find(string(feature)) == _others.end()) {
-        cerr << "new feature : " << feature;
+        cerr << "new feature : " << feature << endl;
         _others.insert(string(feature));
     }
     return OTHERS;
 }
-
-string* gtfexon::_features = NULL;
-const int gtfexon::_num_features = 5;
 
 gtfgene::gtfgene(const string& transcript_id, const string& name, const string& tss_id) {
     _name = name;
@@ -114,7 +120,14 @@ void gtfgene::insert(const string& chromosome, char orientation, int pos5, int p
     _orientation = orientation;
     if (_position5 < 0 || _position5 > pos5) _position5 = pos5;
     if (_position3 < 0 || _position3 < pos3) _position3 = pos3;
-    _exons.push_back(gtfexon(pos5, pos3, feature));
+    //cerr << feature << endl;
+    gtfexon::Feature feature_id = gtfexon::encode_feature(feature);
+    //cerr << feature_id << endl;
+    if (feature_id == gtfexon::EXON
+        || feature_id == gtfexon::UTR
+        || feature_id == gtfexon::CDS) {
+        _exons.push_back(gtfexon(pos5, pos3, feature_id));
+    }
 }
 
 void gtfgene::determine_span() {
@@ -244,6 +257,7 @@ gtffile* gtffile::load_gtf(const char* filename) throw (exception) {
         for (int i = 0; i <= span; i++) {
             char c = ptr[i];
             if (c < ' ') {
+                //cout << line.substr(prev, i - prev) << endl;
                 //ptr[i] = '\0';
                 //cerr << col << ":" << ptr + prev << endl;
                 if (col == 0) { // chromosome
@@ -286,7 +300,7 @@ gtffile* gtffile::load_gtf(const char* filename) throw (exception) {
                                         //cerr << "TSS_ID:" << tss_id << endl;
                                     } else if (strncmp(key, "gene_name", 9) == 0) {
                                         name = value;
-                                        //cerr << "GENE_NAME:" << name << endl;
+                                        //cout << "GENE_NAME:" << name << endl;
                                     } else if (strncmp(key, "transcript_id", 13) == 0) {
                                         transcript_id = value;
                                         //cerr << "TRANSCRIPT_ID:" << transcript_id << endl;
@@ -301,7 +315,10 @@ gtffile* gtffile::load_gtf(const char* filename) throw (exception) {
                         }
                     }
 
-                    if (tss_id != NULL && name != NULL && transcript_id != NULL) {
+                    if (name != NULL && transcript_id != NULL) {
+                        if (tss_id == NULL) {
+                            tss_id = transcript_id;
+                        }
                         data->add(transcript_id, name, tss_id, feature, chromosome, ori, p5, p3);
                     }
                     break;
@@ -346,6 +363,19 @@ bool gtfgene::contains_in_exon_debug(int ccode, int location) const {
     return false;
 }
 
+bool gtfgene::contains(int chromosome_code, int position) const {
+    if (chromosome_code != _chromosome_code || position < _position5 || position > _position3) {
+        return false;
+    }
+    for (int i = 0; i < (int)_exons.size(); i++) {
+        const gtfexon& e = _exons[i];
+        if (e._pos5 <= position && position <= e._pos3) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool gtfgene::contains_in_exon(int chromosome_code, int start, int end) const {
     if (chromosome_code != _chromosome_code || end < _position5 || start > _position3) {
         return false;
@@ -373,9 +403,60 @@ vector<const gtfgene*> gtffile::find_genes(const string& chromosome, int start, 
     return find_genes(ccode, start, end);
 }
 
+const gtfgene* gtffile::get_container(int ccode, int pos) const {
+    const_cast<gtffile*>(this)->sort_genes();
+    int left = 0;
+    int right = _sorted_genes.size();
+    //cout << ccode << ":" << pos << " // " << _sorted_genes.size() << endl;
+    if (right == 0) return NULL;
+    int center = -1;
+    for (;;) {
+        center = (left + right) / 2;
+        const gtfgene* g = _sorted_genes[center];
+        //cout << center << " " << g->chromosome() << ":" << g->_orientation << ":" << g->_position5 << "-" << g->_position3 << " " << g->name() << " // " << ccode << ":" << pos << endl;
+        if (ccode < g->_chromosome_code) {
+            right = center;
+        } else if (ccode > g->_chromosome_code) {
+            left = center + 1;
+        } else if (pos < g->_position5 - _maximum_gene_span) {
+            right = center;
+        } else if (pos > g->_position3 + _maximum_gene_span) {
+            left = center + 1;
+        } else {
+            break;
+        }
+        if (left == right) {
+            center = -1;
+            break;
+        }
+    }
+    if (center < 0) return NULL;
+    for (int index = center; index >= 0; index--) {
+        const gtfgene* g = _sorted_genes[index];
+        if (g->_chromosome_code != ccode || g->_position3 + _maximum_gene_span < pos) {
+            break;
+        } else if (g->contains(ccode, pos)) {
+            return g;
+        }
+    }
+    for (int index = center + 1; index < (int)_sorted_genes.size(); index++) {
+        const gtfgene* g = _sorted_genes[index];
+        if (g->_chromosome_code != ccode || g->_position5 - _maximum_gene_span > pos) {
+            break;
+        } else if (g->contains(ccode, pos)) {
+            return g;
+        }
+    }
+    return NULL;
+}
+
+bool gtffile::contains(int ccode, int pos) const {
+    return get_container(ccode, pos) != NULL;
+}
+
 vector<const gtfgene*> gtffile::find_genes(int ccode, int start, int end) const {
     vector<const gtfgene*> selected;
-    cout << ccode << ":" << start << "-" << end << endl;
+    //cout << ccode << ":" << start << "-" << end << endl;
     if (ccode < 0) {
         vector<const gtfgene*> selected;
         return selected;
@@ -389,10 +470,10 @@ vector<const gtfgene*> gtffile::find_genes(int ccode, int start, int end) const 
     while (left < right) {
         int center = (left + right) >> 1;
         const gtfgene* g = _sorted_genes[center];
-        if (g->_chromosome_code < ccode) {//chromosome) {
-            left = center + 1;
-        } else if (g->_chromosome_code > ccode) {//chromosome) {
+        if (ccode < g->_chromosome_code) {//chromosome) {
             right = center;
+        } else if (ccode > g->_chromosome_code) {//chromosome) {
+            left = center + 1;
         } else if (end < g->_position5 - _maximum_gene_span) {
             right = center;
         } else if (start > g->_position3 + _maximum_gene_span) {

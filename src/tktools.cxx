@@ -1433,7 +1433,7 @@ int tktools::bio::convert_chromosome_to_code(const char* name) {
         }
         return code;
     } else {
-        cerr << "undetermined chromosome " << name << endl;
+        //cerr << "undetermined chromosome " << name << endl;
         return 0;
     }
 }

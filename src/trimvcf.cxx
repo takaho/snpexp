@@ -221,7 +221,146 @@ namespace {
     }
 }
 
+namespace {
+    void annotate(int argc, char** argv) {
+        try {
+        const char* filename_gtf = get_argument_string(argc, argv, "G", "/mnt/smb/tae/mm10/genes.gtf");
+        //const char* filename = get_argument_string(argc, argv, "i", NULL);
+        bool verbose = has_option(argc, argv, "verbose");
+        vector<string> vcffiles;
+        vector<string> bedfiles;
+        for (int i = 1; i < argc; i++) {
+            string fn = argv[i];
+            if (fn.rfind(".vcf") == fn.size() - 4) {
+                if (fn.rfind(".genic.vcf") != fn.size() - 10) {
+                    vcffiles.push_back(fn);
+                }
+            } else if (fn.rfind(".bed") == fn.size() - 4) {
+                if (fn.rfind(".genic.bed") != fn.size() - 10) {
+                    bedfiles.push_back(fn);
+                }
+            } else if (fn.rfind(".txt") == fn.size() - 4) {
+                if (fn.rfind(".genic.txt") != fn.size() - 10) {
+                    bedfiles.push_back(fn);
+                }
+            }
+        }
+
+        if (verbose) {
+            cerr << "GTF : " << filename_gtf << endl;
+            //cerr << "VCF : " << filename << endl;
+        }
+        
+        gtffile* gtf = NULL;
+        if (verbose) {
+            cerr << "loading GTF file\n";
+            gtf = gtffile::load_gtf(filename_gtf);
+        }
+        for (int i = 0; i < (int)bedfiles.size(); i++) {
+            string filename_output = bedfiles[i].substr(0, bedfiles[i].size() - 4) + ".genic.bed";
+            if (verbose) {
+                cerr << bedfiles[i] << "=> " << filename_output << endl;
+            }
+            ofstream fo(filename_output.c_str());
+            if (fo.is_open() == false) {
+                throw logic_error(string("cannot open ") + filename_output);
+            }
+            ifstream fi(bedfiles[i].c_str());
+            while (!fi.eof()) {
+                string line;
+                getline(fi, line);
+                if (line.find("track") == 0 || line.find("browser") == 0) {
+                    fo << line << endl;
+                    continue;
+                }
+                vector<string> items = split_items(line, '\t');
+                if (items.size() > 2) {
+                    int pos = atoi(items[1].c_str());
+                    int ccode = convert_chromosome_to_code(items[0].c_str());
+                    if (ccode <= 0) continue;
+                    const gtfgene* gene = gtf->get_container(ccode, pos);
+                    if (gene != NULL) {
+                        bool tail = false;
+                        for (int i = 0; i < 3; i++) {
+                            if (i > 0) fo << "\t";
+                            fo << items[i];
+                        }
+                        tail = (atoi(items[2].c_str()) <= 0);
+                        if (!tail) { // BED format
+//                        if (items.size() > 3) {
+                            fo << "\t" << gene->name() << ":" << items[3];
+                        } else {
+                            fo << "\t" << items[3];
+                        }
+                        for (int i = 4; i < (int)items.size(); i++) {
+                            fo << "\t" << items[i];
+                        }
+                        if (tail) {
+                            fo << "\t" << gene->name();
+                        }
+                        fo << "\n";
+                    }
+                }
+            }
+             fi.close();
+            fo.close();
+        }
+        
+        for (int i = 0; i < (int)vcffiles.size(); i++) {
+            string filename_output = vcffiles[i].substr(0, vcffiles[i].size() - 4) + ".genic.vcf";
+            if (verbose) {
+                cerr << vcffiles[i] << "->" << filename_output << endl;
+            }
+            ofstream fo(filename_output.c_str());
+            if (fo.is_open() == false) {
+                throw logic_error(string("cannot open ") + filename_output);
+            }
+            ifstream fi(vcffiles[i].c_str());
+            
+            if (fi.is_open() == false) {
+                throw logic_error("cannot open vcf file");
+            }
+            //ostream* ost = &cout;
+        
+            while (!fi.eof()) {
+                string line;
+                getline(fi, line);
+                if (line.c_str()[0] == '#') {
+                    fo << line << endl;
+                    continue;
+                }
+                vector<string> items = split_items(line, '\t');
+                if (items.size() > 6) {
+                    int pos = atoi(items[1].c_str());
+                    int ccode = convert_chromosome_to_code(items[0].c_str());
+                    if (ccode <= 0) continue;
+                    const gtfgene* gene = gtf->get_container(ccode, pos);
+                    if (gene != NULL) {
+                        for (int i = 0; i < 6; i++) {
+                            fo << items[i] << "\t";
+                        }
+                        fo << gene->name();
+                        for (int i = 7; i < (int)items.size(); i++) {
+                            fo << "\t" << items[i];
+                        }
+                        fo << "\n";
+                    }
+                }
+            }
+            fi.close();
+            fo.close();
+        }
+        delete gtf;
+        } catch (exception& e) {
+            cerr << e.what() << endl;
+        }
+    }
+}
+
 int main(int argc, char** argv) {
+    annotate(argc, argv);
+    exit(0);
+    
     try {
         string command;
         if (argc < 2) {

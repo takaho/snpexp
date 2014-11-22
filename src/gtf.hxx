@@ -44,7 +44,7 @@ namespace tkbio {
     ///
     class gtfexon {
     public:
-        enum Feature {UNKNOWN=-1, OTHERS=0, EXON=1, CDS=2, START_CODON=3, STOP_CODON=4, INTRON=5};
+        enum Feature {UNKNOWN=-1, OTHERS=0, EXON=1, CDS=2, START_CODON=3, STOP_CODON=4, INTRON=5, UTR=6, transcript=7, gene=8, Selenocystein=9};
     private:
         static string* _features;
         static const int _num_features;
@@ -98,6 +98,7 @@ namespace tkbio {
         const string& transcript_id() const { return _transcript_id; }
         const string& name() const { return _name; }
         const string& tss_id() const { return _tss_id; }
+        bool contains(int chromosome_code, int location) const;
         bool contains(const string& chromosome, int location) const;
         bool contains_in_exon(const string& chromosome, int location) const;
         bool contains_in_exon(int chromosome_code, int location) const;
@@ -135,6 +136,8 @@ namespace tkbio {
         vector<string> get_symbols() const;
         vector<const gtfgene*> find_genes(const string& chromosome, int start, int end=-1) const;
         vector<const gtfgene*> find_genes(int chromosome, int start, int end) const;
+        const gtfgene* get_container(int chromosome, int location) const;
+        bool contains(int chromosome, int location) const;
         bool contains_in_exon(const string& chromosome, int location) const;
         bool contains_in_exon_debug(const string& chromosome, int location) const;
         vector<pair<int,int> > get_exonregion(const string& chromosome, bool utr=true) const;

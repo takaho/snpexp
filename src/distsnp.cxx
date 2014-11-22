@@ -1017,16 +1017,16 @@ polymorphic_allele polymorphic_allele::NO_DATA(-1,-1);
 
 string allele_count::to_string() const {
     stringstream ss;
-    ss << "H/H:" << this->homo_homo << " " << "H/h:" << this->homo_hetero << " "
-       << "h/H:" << this->hetero_homo << " " << "h/h:" << this->hetero_hetero
-       << " h/h*:" << this->hetero_hetero_diff
-       << " other:" << this->uncountable;
+    ss << "H/H:" << this->homo_homo << "\tH/h:" << this->homo_hetero 
+       << "\th/H:" << this->hetero_homo << " " << "\th/h:" << this->hetero_hetero
+       << "\th/h*:" << this->hetero_hetero_diff
+       << "\tother:" << this->uncountable;
     return ss.str();
 }
 
 double allele_count::homozygosity(bool whole) const {
     if (whole) {
-        double h = homo_homo * 1.0 + hetero_homo * 0.0 + homo_hetero * 0.0 + homo_homo * 1.0 + hetero_hetero_diff;
+        double h = homo_homo * 1.0 + hetero_homo * 0.0 + homo_hetero * 0.0 + hetero_hetero * 1.0 + hetero_hetero_diff;
         return h / (homo_homo + hetero_homo + homo_hetero + hetero_hetero + hetero_hetero_diff);
     } else {
         return (double)hetero_hetero / (hetero_hetero + hetero_hetero_diff);
@@ -1181,106 +1181,107 @@ void denovo_snp::set_scope_without_gtf(int chromosome, int start, int stop) {
 }
 
 void denovo_snp::set_scope(int chromosome, int start, int stop) {
+    set_scope_without_gtf(chromosome, start, stop);
     //cerr << __func__ << endl;
-    if (_genes == NULL) {
-        //cerr << __func__ << endl;
-        set_scope_without_gtf(chromosome, start, stop);
-        return;
-    }
-    if (_chromosome != chromosome || _size == 0) {
-        release_buffer();
-        initialize_buffer(chromosome, start, stop);
-    } else {
-        if (_position[_size - 1] >= start || _position[0] < stop) {
-            vector<int> available;
-            // int begin = _size;
-            // for (int i = 0; i < _size; i++) {
-            //     int pos = _position[i];
-            //     if (pos >= start) {
-            //         begin = i;
-            //         break;
-            //     }
-            // }
-            // int end = 0;
-            // for (int i = _size - 1; i >= 0; i--) {
-            //     int pos = _position[i];
-            //     if (pos <= stop) {
-            //         end = i + 1;
-            //         break;
-            //     }
-            // }
-            int old_size = _size;
-            int* old_position = _position;
-            int** old_count1 = _count1;
-            int** old_count2 = _count2;
+    // if (_genes == NULL) {
+    //     //cerr << __func__ << endl;
+    //     set_scope_without_gtf(chromosome, start, stop);
+    //     return;
+    // }
+    // if (_chromosome != chromosome || _size == 0) {
+    //     release_buffer();
+    //     initialize_buffer(chromosome, start, stop);
+    // } else {
+    //     if (_position[_size - 1] >= start || _position[0] < stop) {
+    //         vector<int> available;
+    //         // int begin = _size;
+    //         // for (int i = 0; i < _size; i++) {
+    //         //     int pos = _position[i];
+    //         //     if (pos >= start) {
+    //         //         begin = i;
+    //         //         break;
+    //         //     }
+    //         // }
+    //         // int end = 0;
+    //         // for (int i = _size - 1; i >= 0; i--) {
+    //         //     int pos = _position[i];
+    //         //     if (pos <= stop) {
+    //         //         end = i + 1;
+    //         //         break;
+    //         //     }
+    //         // }
+    //         int old_size = _size;
+    //         int* old_position = _position;
+    //         int** old_count1 = _count1;
+    //         int** old_count2 = _count2;
 
-            initialize_buffer(chromosome, start, stop);
-            int buffer_size = old_size + _size;
-            int* pbuf = new int[buffer_size];
-            int** cbuf1 = new int*[buffer_size];
-            int** cbuf2 = new int*[buffer_size];
-            for (int i = 0; i < buffer_size; i++) {
-                cbuf1[i] = new int[4];
-                cbuf2[i] = new int[4];
-                for (int j = 0; j < 4; j++) {
-                    cbuf1[i][j] = cbuf2[i][j] = 0;
-                }
-            }
+    //         initialize_buffer(chromosome, start, stop);
+    //         int buffer_size = old_size + _size;
+    //         int* pbuf = new int[buffer_size];
+    //         int** cbuf1 = new int*[buffer_size];
+    //         int** cbuf2 = new int*[buffer_size];
+    //         for (int i = 0; i < buffer_size; i++) {
+    //             cbuf1[i] = new int[4];
+    //             cbuf2[i] = new int[4];
+    //             for (int j = 0; j < 4; j++) {
+    //                 cbuf1[i][j] = cbuf2[i][j] = 0;
+    //             }
+    //         }
 
-            int i0 = 0, i1 = 0;
-            int index = 0;
-            for (;;) {
-                int p0 = _position[i0];
-                int p1 = old_position[i1];
+    //         int i0 = 0, i1 = 0;
+    //         int index = 0;
+    //         for (;;) {
+    //             int p0 = _position[i0];
+    //             int p1 = old_position[i1];
 
-                if (p0 < p1) {
-                    pbuf[index++] = p0;
-                    i0 ++;
-                } else if (p0 > p1) {
-                    pbuf[index++] = p1;
-                    if (++i1 == old_size) {
-                        for (int i = i0; i < _size; i++) {
-                            pbuf[index++] = _position[i];
-                        }
-                        break;
-                    }
-                } else {
-                    for (int j = 0; j < 4; j++) {
-                        cbuf1[index][j] = old_count1[i1][j];
-                        cbuf2[index][j] = old_count2[i1][j];
-                    }
-                    pbuf[index++] = p0;
-                    i1++;
-                    i0++;
-                }
-                if (i0 == _size) {
-                    for (int i = i1; i < old_size; i++) {
-                        memcpy(cbuf1[index], old_count1[i], sizeof(int) * 4);
-                        memcpy(cbuf2[index], old_count2[i], sizeof(int) * 4);
-                        pbuf[index++] = old_position[i];
-                    }
-                    break;
-                } 
-                if (i1 == _size) {
-                    for (int i = i0; i < _size; i++) {
-                        pbuf[index++] = _position[i];
-                    }
-                    break;
-                }
-            }
+    //             if (p0 < p1) {
+    //                 pbuf[index++] = p0;
+    //                 i0 ++;
+    //             } else if (p0 > p1) {
+    //                 pbuf[index++] = p1;
+    //                 if (++i1 == old_size) {
+    //                     for (int i = i0; i < _size; i++) {
+    //                         pbuf[index++] = _position[i];
+    //                     }
+    //                     break;
+    //                 }
+    //             } else {
+    //                 for (int j = 0; j < 4; j++) {
+    //                     cbuf1[index][j] = old_count1[i1][j];
+    //                     cbuf2[index][j] = old_count2[i1][j];
+    //                 }
+    //                 pbuf[index++] = p0;
+    //                 i1++;
+    //                 i0++;
+    //             }
+    //             if (i0 == _size) {
+    //                 for (int i = i1; i < old_size; i++) {
+    //                     memcpy(cbuf1[index], old_count1[i], sizeof(int) * 4);
+    //                     memcpy(cbuf2[index], old_count2[i], sizeof(int) * 4);
+    //                     pbuf[index++] = old_position[i];
+    //                 }
+    //                 break;
+    //             } 
+    //             if (i1 == _size) {
+    //                 for (int i = i0; i < _size; i++) {
+    //                     pbuf[index++] = _position[i];
+    //                 }
+    //                 break;
+    //             }
+    //         }
 
-            release_buffer();
-            _size = index;
-            _reserved = buffer_size;
-            _position = pbuf;
-            _count1 = cbuf1;
-            _count2 = cbuf2;
-            _start = start;
-            _stop = stop;
-            _chromosome = chromosome;
-            _mapped1 = _mapped2 = 0;
-        }
-    }
+    //         release_buffer();
+    //         _size = index;
+    //         _reserved = buffer_size;
+    //         _position = pbuf;
+    //         _count1 = cbuf1;
+    //         _count2 = cbuf2;
+    //         _start = start;
+    //         _stop = stop;
+    //         _chromosome = chromosome;
+    //         _mapped1 = _mapped2 = 0;
+    //     }
+    // }
 }
 
 int denovo_snp::get_index(int position) const {
@@ -1341,56 +1342,57 @@ void denovo_snp::initialize_buffer_without_gtf(int chromosome, int start, int st
 
 void denovo_snp::initialize_buffer(int chromosome, int start, int stop) throw (logic_error) {
     //cerr << "BUFFER " << hex << (void*) _genes << dec << "      " << endl;
-    if (_genes == NULL) {
-        initialize_buffer_without_gtf(chromosome, start, stop);
-        return;
-    }
-    int* posbuffer = new int[stop - start];// + 1];
-    for (int i = 0, span = stop - start; i < span; i++) {
-        posbuffer[i] = 0;
-    }
-    _chromosome = chromosome;
-    vector<const gtfgene*> genes = _genes->find_genes(_chromosome, start, stop);
-    //cout << genes.size() << " genes found\n";
-    for (int i = 0; i < (int)genes.size(); i++) {
-        const vector<gtfexon>& exons = genes[i]->exons();
-        //cout << "ADD " << genes[i]->to_string() << endl;
-        for (int j = 0; j < (int)exons.size(); j++) {
-            int p5 = exons[j].position5();
-            int p3 = exons[j].position3();
-            if (p5 < start) p5 = start;
-            if (p3 >= stop) p3 = stop - 1;
-            for (int p = p5; p <= p3; p++) {
-                posbuffer[p - start] = 1;
-            }
-        }
-    }
-    // count 
-    int length = 0;
-    for (int i = 0, span = stop - start; i < span; i++) {
-        if (posbuffer[i] != 0) {
-            length++;
-        }
-    }
-    //cout << "buffer size = " << length << endl;
+    initialize_buffer_without_gtf(chromosome, start, stop);
+    // if (_genes == NULL) {
+    //     initialize_buffer_without_gtf(chromosome, start, stop);
+    //     return;
+    // }
+    // int* posbuffer = new int[stop - start];// + 1];
+    // for (int i = 0, span = stop - start; i < span; i++) {
+    //     posbuffer[i] = 0;
+    // }
+    // _chromosome = chromosome;
+    // vector<const gtfgene*> genes = _genes->find_genes(_chromosome, start, stop);
+    // //cout << genes.size() << " genes found\n";
+    // for (int i = 0; i < (int)genes.size(); i++) {
+    //     const vector<gtfexon>& exons = genes[i]->exons();
+    //     //cout << "ADD " << genes[i]->to_string() << endl;
+    //     for (int j = 0; j < (int)exons.size(); j++) {
+    //         int p5 = exons[j].position5();
+    //         int p3 = exons[j].position3();
+    //         if (p5 < start) p5 = start;
+    //         if (p3 >= stop) p3 = stop - 1;
+    //         for (int p = p5; p <= p3; p++) {
+    //             posbuffer[p - start] = 1;
+    //         }
+    //     }
+    // }
+    // // count 
+    // int length = 0;
+    // for (int i = 0, span = stop - start; i < span; i++) {
+    //     if (posbuffer[i] != 0) {
+    //         length++;
+    //     }
+    // }
+    // //cout << "buffer size = " << length << endl;
 
-    _size = length;
-    _reserved = _size;
-    _position = new int[length];
-    _count1 = new int*[length];
-    _count2 = new int*[length];
-    for (int i = 0, span = stop - start, index = 0; i < span; i++) {
-        if (posbuffer[i] != 0) {
-            _position[index] = i + start;
-            _count1[index] = new int[4];
-            _count2[index] = new int[4];
-            for (int j = 0; j < 4; j++) {
-                _count1[j] = _count2[j] = 0;
-            }
-            index++;
-        }
-    }
-    delete[] posbuffer;
+    // _size = length;
+    // _reserved = _size;
+    // _position = new int[length];
+    // _count1 = new int*[length];
+    // _count2 = new int*[length];
+    // for (int i = 0, span = stop - start, index = 0; i < span; i++) {
+    //     if (posbuffer[i] != 0) {
+    //         _position[index] = i + start;
+    //         _count1[index] = new int[4];
+    //         _count2[index] = new int[4];
+    //         for (int j = 0; j < 4; j++) {
+    //             _count1[j] = _count2[j] = 0;
+    //         }
+    //         index++;
+    //     }
+    // }
+    // delete[] posbuffer;
 }
 
 void denovo_snp::set_quality(int qual) {
@@ -1522,6 +1524,9 @@ vector<polymorphic_allele> denovo_snp::get_polymorphism(int coverage, double het
         if ((c1 * hetero < n12 && n22 == 0) 
             || (c2 * hetero < n22 && n12 == 0)
             || (n22 == 0 && n12 == 0 && b11 != b21)) {
+            if (_genes != NULL && _genes->contains(_chromosome, _position[i]) == false) {
+                continue;
+            }
             alleles.push_back(polymorphic_allele(_chromosome, _position[i], _count1[i], _count2[i]));
         }
     }
@@ -1808,6 +1813,7 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
         denovo_snp* detector = NULL;
         set<int> touched_chromosome;
         allele_count snp_groups;
+	allele_count snp_chrom;
         chromosome_seq const* chromosome = NULL;
         
 //        bool debug = false;
@@ -1880,15 +1886,10 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
                     if (global_homozygosity) {
                         if (chromosome != NULL) {
                             allele_count cnt = detector->count_allele_types(coverage, heterozygosity, position, position + chunk_size, chromosome);
-                            snp_groups += cnt;
-                            // snp_groups.homo_homo += cnt.homo_homo;
-                            // snp_groups.hetero_homo += cnt.hetero_homo;
-                            // snp_groups.homo_hetero += cnt.homo_hetero;
-                            // snp_groups.hetero_hetero += cnt.hetero_hetero;
-                            // snp_groups.uncountable += cnt.uncountable;
+                            snp_chrom += cnt;
                             if (verbose) {
                                 cerr << " " << headers[0]->target_name[current_chromosome] << ":" << position << "-" << next_position;// << "   " << __LINE__;
-                                cerr <<" " <<  snp_groups.to_string() << "        \r";
+                                cerr <<" " <<  snp_chrom.to_string() << "        \r";
                             }
                         }
                     } else {
@@ -1911,6 +1912,9 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
             }
 
             if (finished) {
+                if (global_homozygosity) {
+                    snp_groups += snp_chrom;
+                }
                 break;
             }
 
@@ -1918,11 +1922,13 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
                 touched_chromosome.insert(current_chromosome);
                 int pos_min = numeric_limits<int>::max();
                 if (verbose) {
-                    if (global_homozygosity) {
-                        cerr << snp_groups.to_string() << endl;
-                        cerr << "Homozygosity (total)   : " << snp_groups.homozygosity() << endl;
-                        cerr << "Homozygosity (partial) : " << snp_groups.homozygosity(false) << endl;
+                    if (global_homozygosity && current_chromosome >= 0) {
+                        cerr << snp_chrom.to_string() << endl;
+                        cerr << "Homozygosity (total)   : " << snp_chrom.homozygosity() << endl;
+                        cerr << "Homozygosity (partial) : " << snp_chrom.homozygosity(false) << endl;
                     }
+		    snp_groups += snp_chrom;
+		    snp_chrom = allele_count();
                     cerr << "change chromosome to " << headers[0]->target_name[next_chromosome] << "      \r";//, sweep " << total_reads << "reads from " << position << "\r";
 
                     // int total_reads = 0;
@@ -1933,6 +1939,10 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
                     
                     // cerr << "change chromosome to " << headers[0]->target_name[next_chromosome] << ", sweep " << total_reads << "reads from " << position << "\r";
                 }
+                if (global_homozygosity) {
+                    *ost << snp_chrom.to_string() << endl;
+                }
+                
                 if (!finished) {
                     for (int i = 0; i < num_files; i++) {
                         //detectors[i]->sweep(current_chromosome);
@@ -1987,7 +1997,6 @@ void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
             *ost << snp_groups.to_string() << endl;
             *ost << "Homozygosity (total)   : " << snp_groups.homozygosity() << endl;
             *ost << "Homozygosity (partial) : " << snp_groups.homozygosity(false) << endl;
-            
         }
         
         if (filename_output != NULL) {

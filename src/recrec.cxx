@@ -720,7 +720,6 @@ vector<chromosome_seq*> chromosome_seq::load_from_cache(const char* filename, ch
 
 
 void chromosome_seq::load_sequence_from_cache() throw (exception) {
-    cerr << "FILENAME" << _filename << endl;
     ifstream fi(_filename.c_str());
     if (fi.is_open() == false) {
         throw invalid_argument("cannot open genome sequence: " + _filename);
