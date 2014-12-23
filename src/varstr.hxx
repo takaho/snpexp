@@ -80,6 +80,43 @@ namespace tkbio {
         friend class str_collection;
     };
 
+    class repeat_result {
+    private:
+        string _pattern;
+        int _start;
+        int _stop;
+        int _coverage;
+        repeat_result() {
+            _start = _stop = _coverage = 0;
+        }
+    public:
+        repeat_result(int size, const char* sequence, int start, int stop) {
+            _pattern = string(sequence, size);
+            _start = start;
+            _stop = stop;
+            _coverage = 0;
+        }
+        repeat_result(int start, int stop) {
+            _start = start;
+            _stop = stop;
+            _coverage = 0;
+        }
+        int unitsize() const { return _pattern.size(); }
+        int start() const { return _start; }
+        int stop() const { return _stop; }
+        int span() const { return _stop - _start; }
+        int repeats() const { return span() / unitsize(); }
+        int coverage() const { return _coverage; }
+        void set_coverage(int coverage) { _coverage = coverage; }
+        const string& pattern() const { return _pattern; }
+        string to_string() const;
+        static repeat_result* analyze_str(int size, char const* buffer, int seq_pos, int unit_min, int unit_max, int required_span) throw (exception);
+        void enumerate_repeat_regions(int argc, char** argv) throw (exception);
+        static bool compare_position(const repeat_result& lhs, const repeat_result& rhs) {
+            return lhs._start < rhs._start;
+        }
+    };
+
     class str_collection {
     private:
         vector<bamread> _reads;
