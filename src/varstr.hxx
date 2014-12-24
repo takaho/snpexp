@@ -80,41 +80,34 @@ namespace tkbio {
         friend class str_collection;
     };
 
-    class repeat_result {
+    class repeat_region {
     private:
+        int _chromosome;
         string _pattern;
         int _start;
         int _stop;
-        int _coverage;
-        repeat_result() {
-            _start = _stop = _coverage = 0;
-        }
+        //int _coverage;
     public:
-        repeat_result(int size, const char* sequence, int start, int stop) {
-            _pattern = string(sequence, size);
-            _start = start;
-            _stop = stop;
-            _coverage = 0;
-        }
-        repeat_result(int start, int stop) {
-            _start = start;
-            _stop = stop;
-            _coverage = 0;
-        }
+        repeat_region(const repeat_region& rhs);
+        const repeat_region& operator = (const repeat_region& rhs);
+        repeat_region(int size, const char* sequence, int start, int stop);
+        repeat_region(int size, const char* sequence, int chromosome, int start, int stop);
+        repeat_region(int start=0, int stop=0);
+        //string chromosome() const;
+        int chromosome() const { return _chromosome; }
         int unitsize() const { return _pattern.size(); }
         int start() const { return _start; }
         int stop() const { return _stop; }
         int span() const { return _stop - _start; }
         int repeats() const { return span() / unitsize(); }
-        int coverage() const { return _coverage; }
-        void set_coverage(int coverage) { _coverage = coverage; }
+        //int coverage() const { return _coverage; }
+        //void set_coverage(int coverage) { _coverage = coverage; }
         const string& pattern() const { return _pattern; }
         string to_string() const;
-        static repeat_result* analyze_str(int size, char const* buffer, int seq_pos, int unit_min, int unit_max, int required_span) throw (exception);
+        static repeat_region* analyze_str(int size, char const* buffer, int seq_pos, int unit_min, int unit_max, int required_span) throw (exception);
         void enumerate_repeat_regions(int argc, char** argv) throw (exception);
-        static bool compare_position(const repeat_result& lhs, const repeat_result& rhs) {
-            return lhs._start < rhs._start;
-        }
+        //static bool compare_position(const repeat_result& lhs, const repeat_result& rhs);
+        static bool compare_position(const repeat_region* lhs, const repeat_region* rhs);
     };
 
     class str_collection {

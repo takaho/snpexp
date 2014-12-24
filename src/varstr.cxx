@@ -17,7 +17,7 @@
 using std::string;
 using std::vector;
 using std::map;
-using std::sort;
+//using std::sort;
 using std::ifstream;
 using std::ofstream;
 using std::cout;
@@ -389,8 +389,47 @@ vector<str_variation> str_collection::get_variations(int coverage, double hetero
 
 namespace {
 
-    bool compare_first_element(const pair<int,int>& lhs, const pair<int,int>& rhs) {
-        return lhs.first < rhs.first;
+    // bool compare_first_element(const pair<int,int>& lhs, const pair<int,int>& rhs) {
+    //     return lhs.first < rhs.first;
+    // }
+
+    pair<int,int> find_repeat_regions(const vector<repeat_region*>& repeats, int chrom, int start, int stop) {
+        int left = 0;
+        int right = (int)repeats.size();
+        int center = 0;
+        while (left < right) {
+            center = (left + right) / 2;
+            const repeat_region* r = repeats[center];
+            if (r->chromosome() < chrom) {
+                left = center + 1;
+            } else if (r->chromosome() > chrom) {
+                right = center;
+            } else if (r->start() > stop) {
+                right = center;
+            } else if (r->stop() < start) {
+                left = center + 1;
+            } else {
+                //int index = center;
+                int limit_lower = 0;
+                int limit_upper = (int)repeats.size();
+                for (int i = center; i >= 0; i--) {
+                    r = repeats[i];
+                    if (r->chromosome() != chrom || r->stop() < start) {
+                        limit_lower = i + 1;
+                        break;
+                    }
+                }
+                for (int i = center + 1; i < (int)repeats.size(); i++) {
+                    r = repeats[i];
+                    if (r->chromosome() != chrom || r->start() < stop) {
+                        limit_upper = i;
+                        break;
+                    }
+                }
+                return make_pair(limit_lower, limit_upper);
+            }
+        }
+        return make_pair(0,0);
     }
 }
 
@@ -428,7 +467,8 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
         bamFile* bamfiles = new bamFile[num_files];
         bam_header_t** headers = new bam_header_t*[num_files];
         bam1_t** reads = new bam1_t*[num_files];
-        map<string,vector<repeat_result> > test_regions;//pair<int,int> > > test_regions;
+        //map<string,vector<repeat_region> > test_regions;//pair<int,int> > > test_regions;
+        vector<repeat_region*> preset_regions;
 
         if (filename_output != NULL) {
             ofstream* fo = new ofstream(filename_output);
@@ -436,41 +476,6 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
                 throw invalid_argument("cannot open output file");
             }
             ost = fo;
-        }
-        if (use_preset) {
-            if (verbose) cerr << "loading preset regions\n";
-            ifstream fi(filename_bed);
-            while (!fi.eof()) {
-                string line;
-                getline(fi, line);
-                vector<string> items = split_items(line, '\t');
-                if (items.size() >= 3) {
-                    const string& chrom = items[0];
-                    int start = atoi(items[1].c_str());
-                    int stop = atoi(items[2].c_str());
-                    map<string,vector<repeat_result> >::iterator it = test_regions.find(chrom);
-                    if (it == test_regions.end()) {
-                        vector<repeat_result> _r;
-                        _r.push_back(repeat_result(start, stop));
-                        // test_regions[chrom] = _r;
-                        // vector<pair<int,int> > _r;
-                        // _r.push_back(make_pair(start, stop));
-                        test_regions[chrom] = _r;
-                        //test_regions.put(make_pair(chrom, make_pair(start, stop)));
-                    } else {
-                        it->second.push_back(repeat_result(start, stop));
-                    }
-                }
-            }
-            fi.close();
-            for (map<string,vector<repeat_result> >::const_iterator it = test_regions.begin(); it != test_regions.end(); it++) {
-                //for (map<string,vector<pair<int,int> > >::const_iterator it = test_regions.begin(); it != test_regions.end(); it++) {
-                if (verbose) {
-                    cerr << it->first << "\t" << it->second.size() << endl;
-                }
-                std::sort(it->second.begin(), it->second.end(), repeat_result::compare_position);
-            }
-            //exit(0);
         }
 
         // if (verbose) {
@@ -491,12 +496,73 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
             throw runtime_error("incompatible bam files");
         }
 
+        if (use_preset) {
+            if (verbose) cerr << "loading preset regions\n";
+            ifstream fi(filename_bed);
+            map<string,int> c2code;
+            while (!fi.eof()) {
+                string line;
+                getline(fi, line);
+                vector<string> items = split_items(line, '\t');
+                if (items.size() >= 3) {
+                    const string& chrom = items[0];
+                    map<string,int>::const_iterator ic = c2code.find(chrom);
+                    int chromcode = -1;
+                    if (ic == c2code.end()) {
+                        for (int i = 0; i < headers[0]->n_targets; i++) {
+                            if (chrom == headers[0]->target_name[i]) {
+                                chromcode = i;
+                                break;
+                            }
+                        }
+                        c2code[chrom] = chromcode;
+                    } else {
+                        chromcode = ic->second;
+                    }
+                    if (chromcode < 0) continue;
+                    int start = atoi(items[1].c_str());
+                    int stop = atoi(items[2].c_str());
+                    int unitsize = 0;
+                    string unitmotif;
+                    if (items.size() >= 5) {
+                        unitmotif = items[4];
+                        unitsize = std::atoi(items[3].c_str());
+                    }
+                    preset_regions.push_back(new repeat_region(unitsize, unitmotif.c_str(), chromcode, start, stop));
+                    
+                    // map<string,vector<repeat_region> >::iterator it = test_regions.find(chrom);
+                    // if (it == test_regions.end()) {
+                    //     vector<repeat_region> _r;
+                    //     _r.push_back(repeat_region(start, stop));
+                    //     // test_regions[chrom] = _r;
+                    //     // vector<pair<int,int> > _r;
+                    //     // _r.push_back(make_pair(start, stop));
+                    //     test_regions[chrom] = _r;
+                    //     //test_regions.put(make_pair(chrom, make_pair(start, stop)));
+                    // } else {
+                    //     it->second.push_back(repeat_region(start, stop));
+                    // }
+                }
+            }
+            fi.close();
+            std::sort(preset_regions.begin(), preset_regions.end(), repeat_region::compare_position);
+            // for (map<string,vector<repeat_region> >::const_iterator it = test_regions.begin(); it != test_regions.end(); it++) {
+            //     //for (map<string,vector<pair<int,int> > >::const_iterator it = test_regions.begin(); it != test_regions.end(); it++) {
+            //     if (verbose) {
+            //         cerr << it->first << "\t" << it->second.size() << endl;
+            //     }
+            //     std::sort(it->second.begin(), it->second.end(), repeat_region::compare_position);
+            // }
+            //exit(0);
+        }
+        
         int current_chromosome = -1;
         int next_chromosome = -1;
         int position = 0;
         int next_position = position + chunk_size;
         int steps = 0;
-        vector<repeat_result>* counting_regions = NULL;
+        //vector<repeat_region>* counting_regions = NULL;
+        vector<repeat_region> target_regions;
         int preset_regions_start = 0;
         int preset_regions_stop = 0;
         
@@ -507,36 +573,13 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
             bool active = true;
             if (use_preset) {
                 active = false;
-                if (counting_regions == NULL) {
-                    int left = 0;
-                    int right = counting_regions->size();
-                    preset_regions_start = preset_regions_stop = 0;
-                    while (left < right) {
-                        int center = (left + right) / 2;
-                        const repeat_result& r_ = (*counting_regions)[center];
-                        if (r_.start() > next_position) {
-                            left = center + 1;
-                        } else if (r_.stop() < position) {
-                            active = true;
-                            preset_regions_start = 0;
-                            for (int i = center; i >= 0; i--) {
-                                const repeat_result& q_ = (*counting_regions)[i];
-                                if (q_.stop() < position) {
-                                    preset_regions_start = i + 1;
-                                    break;
-                                }
-                            }
-                            preset_regions_stop = counting_regions->size();
-                            for (int i = center + 1; i < (int)counting_regions->size(); i++) {
-                                const repeat_result& q_ = (*counting_regions)[i];
-                                if (q_.start() > next_position) {
-                                    preset_regions_stop = i;
-                                    break;
-                                }
-                            }
-                            break;
-                        }
-                    }
+                pair<int,int> rindices = find_repeat_regions(preset_regions, current_chromosome, position, next_position);
+                if (rindices.first < rindices.second) {
+                    active = true;
+                    preset_regions_start = rindices.first;
+                    preset_regions_stop = rindices.second;
+                } else {
+                    active = false;
                 }
             }
                
@@ -583,6 +626,7 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
                         cerr << "     \r";
                     }
                 }
+
                 vector<vector<str_variation> > detected;
                 for (int i = 0; i < num_files; i++) {
                     vector<str_variation> gaps = detectors[i]->get_variations(coverage / 2, heterozygosity);
@@ -591,54 +635,79 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
                     //     cout << gaps[j].to_string() << endl;
                     // }
                 }
+                if (use_preset) {
+                    for (int index = preset_regions_start; index < preset_regions_stop; index++) {
+                        repeat_region* rr = preset_regions[index];
+                        *ost << headers[0]->target_name[rr->chromosome()] << "\t" << rr->start() << "\t" << rr->stop();
+                        for (int i = 0; i < (int)detected.size(); i++) {
+                            //bool has_variation = false;
+                            const str_variation* sv_inside = NULL;
+                            for (int j = 0; j < (int)detected[i].size(); j++) {
+                                const str_variation& sv = detected[i][j];
 
-                // if (position + chunk_size > 68444170 && position < 68444200) {
-                //     debug = true;
-                // }
-                for (int i = 0; i < num_files; i++) {
-                    vector<str_variation>& vi = detected[i];
-                    for (int k = 0; k < (int)vi.size(); k++) {
-                        str_variation& ak = vi[k];
-                        int c = ak.coverage();
-                        int o = ak.occurrence();
-                        if (c < coverage || o < c / 4 || o > c * 4) {
-                            continue;
+                                if (sv.position() >= rr->start() && sv.position() + sv.reference_span() <= rr->stop()) {
+                                    int c = sv.coverage();
+                                    int o = sv.occurrence();
+                                    if (c >= coverage && o >= c / 4 && o <= c * 4) {
+                                        sv_inside = &sv;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (sv_inside == NULL) {
+                                *ost<< "\t" << sv_inside->feature() << ":" << (sv_inside->reference_span() > 0 ? sv_inside->reference_span() : sv_inside->read_span());
+                            } else {
+                                *ost << ".\t";
+                            }
                         }
-                        // if (debug) {
-                        //     cerr << "test " << i << "," << k << ":" << ak.to_string() << "\t";
-                        // }
-                        bool flag_shared = false;
-                        for (int j = 0; j < num_files; j++) {
-                            if (i == j) continue;
-                            vector<str_variation>& vj = detected[j];
-                            for (int l = 0; l < (int)vj.size(); l++) {
-                                if (ak == vj[l]) {
-                                    // if (debug) {
-                                    //     cerr << " rejected by " << j << "," << l << ":" << vj[l].to_string() << endl;
-                                    // }
-                                    flag_shared = true;
-                                    ak.set_counts(0,0,0);
-                                    vj[l].set_counts(0,0,0);
+                        *ost << "\n";
+                    }
+                } else {
+                    for (int i = 0; i < num_files; i++) {
+                        vector<str_variation>& vi = detected[i];
+                        for (int k = 0; k < (int)vi.size(); k++) {
+                            str_variation& ak = vi[k];
+                            int c = ak.coverage();
+                            int o = ak.occurrence();
+                            if (c < coverage || o < c / 4 || o > c * 4) {
+                                continue;
+                            }
+                            // if (debug) {
+                            //     cerr << "test " << i << "," << k << ":" << ak.to_string() << "\t";
+                            // }
+                            bool flag_shared = false;
+                            for (int j = 0; j < num_files; j++) {
+                                if (i == j) continue;
+                                vector<str_variation>& vj = detected[j];
+                                for (int l = 0; l < (int)vj.size(); l++) {
+                                    if (ak == vj[l]) {
+                                        // if (debug) {
+                                        //     cerr << " rejected by " << j << "," << l << ":" << vj[l].to_string() << endl;
+                                        // }
+                                        flag_shared = true;
+                                        ak.set_counts(0,0,0);
+                                        vj[l].set_counts(0,0,0);
+                                        break;
+                                    }
+                                }
+                                if (flag_shared) {
+                                    //cerr << " accepted   \n";
                                     break;
                                 }
                             }
-                            if (flag_shared) {
-                                //cerr << " accepted   \n";
-                                break;
-                            }
-                        }
-                        if (!flag_shared) {
-                            // test coverage in the other sequences
-                            for (int j = 0; j < num_files; j++) {
-                                if (i == j) continue;
-                                if (detectors[j]->count_coverage(ak.position(), ak.position() + ak.reference_span()) >= coverage) {
-                                    *ost << headers[i]->target_name[current_chromosome] 
-                                         << "\t" << ak.position() 
-                                         << "\t" << (ak.position() + ak.reference_span())
-                                         << "\t" << ak.read_span() 
-                                         << "\t" << ak.reference_span()
-                                         << "\t" << ak.occurrence() << "/" << ak.opposite() 
-                                         << flush << endl;
+                            if (!flag_shared) {
+                                // test coverage in the other sequences
+                                for (int j = 0; j < num_files; j++) {
+                                    if (i == j) continue;
+                                    if (detectors[j]->count_coverage(ak.position(), ak.position() + ak.reference_span()) >= coverage) {
+                                        *ost << headers[i]->target_name[current_chromosome] 
+                                             << "\t" << ak.position() 
+                                             << "\t" << (ak.position() + ak.reference_span())
+                                             << "\t" << ak.read_span() 
+                                             << "\t" << ak.reference_span()
+                                             << "\t" << ak.occurrence() << "/" << ak.opposite() 
+                                             << flush << endl;
+                                    }
                                 }
                             }
                         }
@@ -724,14 +793,56 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
         return -1;
     }
 
-}    
-string repeat_result::to_string() const {
+}
+
+repeat_region::repeat_region(const repeat_region& rhs) {
+    _pattern = rhs._pattern;
+    _chromosome = rhs._chromosome;
+    _start = rhs._start;
+    _stop = rhs._stop;
+    //_coverage = rhs._coverage;
+}
+
+const repeat_region& repeat_region::operator = (const repeat_region& rhs) {
+    if (this == &rhs) return *this;
+    _pattern = rhs._pattern;
+    _chromosome = rhs._chromosome;
+    _start = rhs._start;
+    _stop = rhs._stop;
+    //_coverage = rhs._coverage;
+    return *this;
+}
+
+repeat_region::repeat_region(int size, const char* sequence, int start, int stop) {
+    _pattern = string(sequence, size);
+    _chromosome = -1;
+    _start = start;
+    _stop = stop;
+    //_coverage = 0;
+}
+
+repeat_region::repeat_region(int size, const char* sequence, int chromosome, int start, int stop) {
+    _pattern = string(sequence, size);
+    _chromosome = chromosome;
+    _start = start;
+    _stop = stop;
+    //_coverage = 0;
+}
+
+repeat_region::repeat_region(int start, int stop) {
+    _chromosome = -1;
+    _start = start;
+    _stop = stop;
+    //_coverage = 0;
+}
+
+string repeat_region::to_string() const {
     stringstream ss;
     ss << start() << "-" << stop() << "\t" << pattern() << "\t" << unitsize() << "x" << repeats() << "=" << span();//repeats();
     return ss.str();
 }
 
-repeat_result* repeat_result::analyze_str(int size, char const* buffer, int seq_pos, int unit_min, int unit_max, int required_span) throw (exception) {
+repeat_region* repeat_region::analyze_str(int size, char const* buffer, int seq_pos, int unit_min, int unit_max, int required_span) throw (exception) {
     for (int u = 0; u < unit_max; u++) {
         char c = buffer[u];
         if (c != 'A' && c != 'C' && c != 'G' && c != 'T') {
@@ -771,13 +882,29 @@ repeat_result* repeat_result::analyze_str(int size, char const* buffer, int seq_
             //     }
             //     stop += unit;
             // }
-            return new repeat_result(unit, buffer, seq_pos, seq_pos + stop);
+            return new repeat_region(unit, buffer, seq_pos, seq_pos + stop);
         }
     }
     return NULL;
 }
 
-void repeat_result::enumerate_repeat_regions(int argc, char** argv) throw (exception) {
+// bool repeat_region::compare_position(const repeat_region& lhs, const repeat_region& rhs) {
+//     if (lhs._chromosome != rhs._chromosome) {
+//         return lhs._chromosome < rhs._chromosome;
+//     } else {
+//         return lhs._start < rhs._start;
+//     }
+// }
+
+bool repeat_region::compare_position(const repeat_region* lhs, const repeat_region* rhs) {
+    if (lhs->_chromosome != rhs->_chromosome) {
+        return lhs->_chromosome < rhs->_chromosome;
+    } else {
+        return lhs->_start < rhs->_start;
+    }
+}
+
+void repeat_region::enumerate_repeat_regions(int argc, char** argv) throw (exception) {
     ifstream fi("/Data/mm10/mm10.fa");
     //int position = 0;
     string chromosome;
@@ -812,7 +939,7 @@ void repeat_result::enumerate_repeat_regions(int argc, char** argv) throw (excep
                     buffer[bpos++] = base;
                     if (bpos == buffer_size) {
                         for (int i = 0; i < buffer_size - str_span; i++) {
-                            repeat_result* rep = analyze_str(buffer_size, buffer + i, spos + i, unit_min, unit_max, str_span);
+                            repeat_region* rep = analyze_str(buffer_size, buffer + i, spos + i, unit_min, unit_max, str_span);
                             if (rep != NULL) {
                                 *ost << chromosome << "\t" << rep->start() << "\t" << rep->stop() << "\t" << rep->span() << "\t" << rep->pattern() << endl;
                                 i += rep->span();
