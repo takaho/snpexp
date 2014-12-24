@@ -421,7 +421,7 @@ namespace {
                 }
                 for (int i = center + 1; i < (int)repeats.size(); i++) {
                     r = repeats[i];
-                    if (r->chromosome() != chrom || r->start() < stop) {
+                    if (r->chromosome() != chrom || r->start() > stop) {
                         limit_upper = i;
                         break;
                     }
@@ -522,30 +522,19 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
                     if (chromcode < 0) continue;
                     int start = atoi(items[1].c_str());
                     int stop = atoi(items[2].c_str());
-                    int unitsize = 0;
+                    //int unitsize = 0;
                     string unitmotif;
                     if (items.size() >= 5) {
                         unitmotif = items[4];
-                        unitsize = std::atoi(items[3].c_str());
+                        //unitsize = std::atoi(items[3].c_str());
                     }
-                    preset_regions.push_back(new repeat_region(unitsize, unitmotif.c_str(), chromcode, start, stop));
-                    
-                    // map<string,vector<repeat_region> >::iterator it = test_regions.find(chrom);
-                    // if (it == test_regions.end()) {
-                    //     vector<repeat_region> _r;
-                    //     _r.push_back(repeat_region(start, stop));
-                    //     // test_regions[chrom] = _r;
-                    //     // vector<pair<int,int> > _r;
-                    //     // _r.push_back(make_pair(start, stop));
-                    //     test_regions[chrom] = _r;
-                    //     //test_regions.put(make_pair(chrom, make_pair(start, stop)));
-                    // } else {
-                    //     it->second.push_back(repeat_region(start, stop));
-                    // }
+                    preset_regions.push_back(new repeat_region(unitmotif.size(), unitmotif.c_str(), chromcode, start, stop));
                 }
             }
             fi.close();
+            //cerr << "sort\n";
             std::sort(preset_regions.begin(), preset_regions.end(), repeat_region::compare_position);
+            //cerr << "sorted\n";
             // for (map<string,vector<repeat_region> >::const_iterator it = test_regions.begin(); it != test_regions.end(); it++) {
             //     //for (map<string,vector<pair<int,int> > >::const_iterator it = test_regions.begin(); it != test_regions.end(); it++) {
             //     if (verbose) {
@@ -581,6 +570,7 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
                 } else {
                     active = false;
                 }
+                //cerr << position << "-" << next_position << ":" << active << "         " << endl;
             }
                
             for (int i = 0; i < num_files; i++) {
@@ -636,31 +626,58 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
                     // }
                 }
                 if (use_preset) {
+                    //cerr << "check preset regions : \n";
                     for (int index = preset_regions_start; index < preset_regions_stop; index++) {
                         repeat_region* rr = preset_regions[index];
-                        *ost << headers[0]->target_name[rr->chromosome()] << "\t" << rr->start() << "\t" << rr->stop();
+                        int cov_min = detectors[0]->count_coverage(rr->start(), rr->stop());
+                        for (int i = 1; i < num_files; i++) {
+                            int cov_ = detectors[i]->count_coverage(rr->start(), rr->stop());
+                            if (cov_ < cov_min) {
+                                cov_min = cov_;
+                            }
+                        }
+                        if (cov_min >= coverage) {
+                            rr->set_status((repeat_region::STATUS)(rr->status() | repeat_region::COVERED));
+                        }
+                            
+
+                        bool flag_accepted = false;
+                        stringstream vstr;
+                        //*ost << headers[0]->target_name[rr->chromosome()] << "\t" << rr->start() << "\t" << rr->stop();
                         for (int i = 0; i < (int)detected.size(); i++) {
+                            //cerr << "file " << i << endl;
                             //bool has_variation = false;
                             const str_variation* sv_inside = NULL;
                             for (int j = 0; j < (int)detected[i].size(); j++) {
+                                //cerr << "item " << j << endl;
                                 const str_variation& sv = detected[i][j];
 
                                 if (sv.position() >= rr->start() && sv.position() + sv.reference_span() <= rr->stop()) {
                                     int c = sv.coverage();
                                     int o = sv.occurrence();
+                                    //if (c >= coverage) {
+                                    //int o = sv.occurrence();
                                     if (c >= coverage && o >= c / 4 && o <= c * 4) {
                                         sv_inside = &sv;
-                                        break;
+                                        rr->set_status((repeat_region::STATUS)(repeat_region::POLYMORPHIC | rr->status()));
+                                        break;                                    
                                     }
                                 }
                             }
-                            if (sv_inside == NULL) {
-                                *ost<< "\t" << sv_inside->feature() << ":" << (sv_inside->reference_span() > 0 ? sv_inside->reference_span() : sv_inside->read_span());
+                            if (sv_inside != NULL) {
+                                flag_accepted = true;
+                                vstr<< "\t" << sv_inside->feature() << ":" << (sv_inside->reference_span() > 0 ? sv_inside->reference_span() : sv_inside->read_span());
                             } else {
-                                *ost << ".\t";
+                                vstr << "\t.";
                             }
                         }
-                        *ost << "\n";
+                        //*ost << "\n";
+                        if (flag_accepted) {//flag_accepted) {
+                            cerr << headers[0]->target_name[rr->chromosome()] << "\t" << rr->start() << "\t" << rr->stop();
+                            cerr << "\t" << cov_min << "\t" << rr->covered() << "\t" << rr->polymorphic();
+                            cerr << vstr.str() << flush << "\n";
+                            //rr->set_accepted(true);
+                        }
                     }
                 } else {
                     for (int i = 0; i < num_files; i++) {
@@ -770,6 +787,13 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
                 next_position = position + chunk_size;
             }
         }
+        if (use_preset) {
+            for (int i = 0; i < (int)preset_regions.size(); i++) {
+                repeat_region* rr = preset_regions[i];
+                *ost << headers[0]->target_name[rr->chromosome()] << "\t" << rr->start() << "\t" << rr->stop() << "\t" << rr->covered() << "\t" << rr->polymorphic() << endl;
+                delete rr;
+            }
+        }
 
         if (filename_output != NULL) {
             dynamic_cast<ofstream*>(ost)->close();
@@ -800,6 +824,8 @@ repeat_region::repeat_region(const repeat_region& rhs) {
     _chromosome = rhs._chromosome;
     _start = rhs._start;
     _stop = rhs._stop;
+    _status = DEFAULT;
+    //_accepted = rhs._accepted;
     //_coverage = rhs._coverage;
 }
 
@@ -809,6 +835,8 @@ const repeat_region& repeat_region::operator = (const repeat_region& rhs) {
     _chromosome = rhs._chromosome;
     _start = rhs._start;
     _stop = rhs._stop;
+    //_accepted = rhs._accepted;
+    _status = rhs._status;
     //_coverage = rhs._coverage;
     return *this;
 }
@@ -818,6 +846,8 @@ repeat_region::repeat_region(int size, const char* sequence, int start, int stop
     _chromosome = -1;
     _start = start;
     _stop = stop;
+    _status = DEFAULT;
+    //_accepted = false;
     //_coverage = 0;
 }
 
@@ -826,6 +856,8 @@ repeat_region::repeat_region(int size, const char* sequence, int chromosome, int
     _chromosome = chromosome;
     _start = start;
     _stop = stop;
+    _status = DEFAULT;
+    //_accepted = false;
     //_coverage = 0;
 }
 
@@ -833,6 +865,8 @@ repeat_region::repeat_region(int start, int stop) {
     _chromosome = -1;
     _start = start;
     _stop = stop;
+    _status = DEFAULT;
+    //_accepted = false;
     //_coverage = 0;
 }
 

@@ -1,5 +1,5 @@
 AC_INIT(snpexp.cxx)
-AM_INIT_AUTOMAKE(snpexp,0.4.5)
+AM_INIT_AUTOMAKE(snpexp,0.4.6)
 AC_PROG_CC
 AC_CHECK_HEADERS(zlib.h bam.h)
 AC_PROG_CXX

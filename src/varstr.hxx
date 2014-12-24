@@ -81,11 +81,15 @@ namespace tkbio {
     };
 
     class repeat_region {
+    public:
+        typedef enum STATUS {DEFAULT=0, COVERED=1, POLYMORPHIC=2} STATUS;
     private:
         int _chromosome;
         string _pattern;
         int _start;
         int _stop;
+        //bool _accepted;
+        STATUS _status;
         //int _coverage;
     public:
         repeat_region(const repeat_region& rhs);
@@ -100,6 +104,12 @@ namespace tkbio {
         int stop() const { return _stop; }
         int span() const { return _stop - _start; }
         int repeats() const { return span() / unitsize(); }
+        bool accepted() const { return (_status & COVERED & POLYMORPHIC) != 0; }
+        bool covered() const { return (_status & COVERED) != 0; }
+        bool polymorphic() const { return (_status & POLYMORPHIC) != 0; }
+        STATUS status() const { return _status; }
+        void set_status(STATUS status) { _status = status; }
+        //void set_accepted(bool flag) { _accepted = flag; }
         //int coverage() const { return _coverage; }
         //void set_coverage(int coverage) { _coverage = coverage; }
         const string& pattern() const { return _pattern; }
