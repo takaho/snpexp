@@ -196,11 +196,15 @@ int main(int argc, char** argv) {
         } else if (command == "dist") {
             mode = 2;
         } else if (command == "filter") {
-	  mode = 3;
+            mode = 3;
         } else if (command == "str") {
-             mode = 4;
+            mode = 4;
         } else if (command == "cmp") {
             mode = 5;
+        } else if (command == "cover") {
+            mode = 6;
+        } else {
+            throw invalid_argument("mode not defined");
         }
 
         if (mode == 5) {
@@ -304,6 +308,9 @@ int main(int argc, char** argv) {
             _proc->set_heterozygosity(heterozygosity);
             processor = _proc;
             dynamic_cast<strain_estimator*>(processor)->to_string();
+        } else if (mode == 6) {
+            coverratio_counter* _proc = new coverratio_counter();
+            processor = _proc;
         }
 
         if (processor == NULL) {
@@ -551,9 +558,11 @@ second
                     }
                     cerr << "       \r";
 
-                    // if (++counter % 1000 == 0) {
-                    //     cerr << "\n" << processor->to_string() << endl;
-                    // }
+                    //cout << processor->to_string() << endl;
+                    
+                     // if (++counter % 10 == 0) {
+                     //     cerr << "\n" << processor->to_string() << endl;
+                     // }
                 }
                 if (!chromosome_not_included) {
                     processor->process_fragments(fragments, chromosome, analysis_start, analysis_end, *ost);

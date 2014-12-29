@@ -828,3 +828,72 @@ string strain_estimator::to_string() const {
 }
 
 
+coverratio_counter::coverratio_counter(int max_cover, int tolerance) {
+    _max_cover = max_cover;
+    _gap_tolerance = tolerance;
+    _count = new unsigned long long[max_cover];
+}
+
+coverratio_counter::~coverratio_counter() {
+    delete[] _count;
+}
+
+string coverratio_counter::to_string() const {
+    stringstream ss;
+    for (int i = 0; i < _max_cover; i++) {
+        ss << i << "\t" << _count[i] << "\n";
+    }
+    return ss.str();
+}
+
+void coverratio_counter::process_fragments(const vector<recfragment*>& fragments,
+                                       chromosome_seq const* chromosome,
+                                           int start, int end, ostream& ost) throw (exception) {
+    int size = end - start;
+    int* stack = new int[size];
+    bool* masked = new bool[size];
+    for (int i = 0; i < size; i++) {
+        masked[i] = false;
+        stack[i] = 0;
+    }
+    for (int pos = start; pos < end; pos++) {
+        if (chromosome->get_base_code(pos) == (unsigned char)0xf) {
+            int index = pos - start;
+            masked[index] = true;
+            for (int j = 1; j < _gap_tolerance; j++) {
+                int left = index - j;
+                int right = index + j;
+                if (left >= 0) masked[left] = true;
+                if (right < size) masked[right] = true;
+            }
+            pos += _gap_tolerance;
+        }
+    }
+    for (int i = 0; i < (int)fragments.size(); i++) {
+        const recfragment* f = fragments[i];
+        for (int pos = f->position5(); pos < f->position3(); pos++) {
+            int index = pos - start;
+            if (0 <= index && index < size) {
+                if (masked[index]) continue;
+        //if (start <= f->position5() && f->position3() < end) {
+//        for (int j = 0; j < size; j++) {
+//            if (masked[j]) continue;
+//            int pos = start + j;
+                int num;
+                int base = f->get_base_id(pos, _quality_threshold, num);
+                if (base >= 0) {
+                    stack[index] += num;
+                }
+            }
+        }
+            //}
+    }
+    for (int i = 0; i < end - start; i++) {
+        if (masked[i]) continue;
+        int n = stack[i];
+        if (n >= _max_cover) { n = _max_cover - 1; }
+        _count[n]++;
+    }
+    delete[] stack;
+    delete[] masked;
+}

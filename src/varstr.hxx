@@ -115,7 +115,7 @@ namespace tkbio {
         const string& pattern() const { return _pattern; }
         string to_string() const;
         static repeat_region* analyze_str(int size, char const* buffer, int seq_pos, int unit_min, int unit_max, int required_span) throw (exception);
-        void enumerate_repeat_regions(int argc, char** argv) throw (exception);
+        static void enumerate_repeat_regions(int argc, char** argv) throw (exception);
         //static bool compare_position(const repeat_result& lhs, const repeat_result& rhs);
         static bool compare_position(const repeat_region* lhs, const repeat_region* rhs);
     };

@@ -435,6 +435,10 @@ namespace {
 
 int str_collection::detect_str(int argc, char** argv) throw (exception) {
     try {
+        if (has_option(argc, argv, "-enum")) {
+            repeat_region::enumerate_repeat_regions(argc, argv);
+            return 0;
+        }
         const char* filename1 = get_argument_string(argc, argv, "1", "/mnt/smb/tae/stap/shira/BAM6/Sample6.bam");
         const char* filename2 = get_argument_string(argc, argv, "2", "/mnt/smb/tae/stap/shira/BAM12/Sample12.bam");
         const char* filename_bed = get_argument_string(argc, argv, "b", NULL);
@@ -528,7 +532,9 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
                         unitmotif = items[4];
                         //unitsize = std::atoi(items[3].c_str());
                     }
+		    //cerr << line ;
                     preset_regions.push_back(new repeat_region(unitmotif.size(), unitmotif.c_str(), chromcode, start, stop));
+		    //cerr << "\t***\n";
                 }
             }
             fi.close();
@@ -554,7 +560,6 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
         vector<repeat_region> target_regions;
         int preset_regions_start = 0;
         int preset_regions_stop = 0;
-        
 //        bool debug = false;
         for (;;) {
             bool chromosome_change = false;
@@ -606,7 +611,7 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
 
             // detect gaps and insertions
             if (current_chromosome >= 0) {
-                if (verbose) {
+                if (verbose && !use_preset) {
                     if (++steps % 1000 == 0) {
                         cerr << " " << headers[0]->target_name[current_chromosome] << ":" << position << "-" << next_position << " ";
                         //cerr << current_chromosome << ":" << position << "-" << next_position << " ";
@@ -638,10 +643,13 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
                         }
                         if (cov_min >= coverage) {
                             rr->set_status((repeat_region::STATUS)(rr->status() | repeat_region::COVERED));
-                        }
+                        } else {
+			  continue;
+			}
                             
-
-                        bool flag_accepted = false;
+			//bool flag_covered = false;
+			//bool flag_polymorphic = false;
+                        //bool flag_accepted = false;
                         stringstream vstr;
                         //*ost << headers[0]->target_name[rr->chromosome()] << "\t" << rr->start() << "\t" << rr->stop();
                         for (int i = 0; i < (int)detected.size(); i++) {
@@ -654,25 +662,29 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
 
                                 if (sv.position() >= rr->start() && sv.position() + sv.reference_span() <= rr->stop()) {
                                     int c = sv.coverage();
-                                    int o = sv.occurrence();
+				    if (c >= coverage) {
+				      //flag_covered = true;
+				      int o = sv.occurrence();
                                     //if (c >= coverage) {
                                     //int o = sv.occurrence();
-                                    if (c >= coverage && o >= c / 4 && o <= c * 4) {
+				      if (o >= c / 4 && o <= c * 4) {
                                         sv_inside = &sv;
                                         rr->set_status((repeat_region::STATUS)(repeat_region::POLYMORPHIC | rr->status()));
                                         break;                                    
-                                    }
+				      }
+				    }
                                 }
                             }
                             if (sv_inside != NULL) {
-                                flag_accepted = true;
-                                vstr<< "\t" << sv_inside->feature() << ":" << (sv_inside->reference_span() > 0 ? sv_inside->reference_span() : sv_inside->read_span());
+			      //flag_polymorphic = true;
+			      //flag_accepted = true;
+			      vstr<< "\t" << sv_inside->feature() << ":" << (sv_inside->reference_span() > 0 ? sv_inside->reference_span() : sv_inside->read_span());
                             } else {
-                                vstr << "\t.";
+			      vstr << "\t.";
                             }
                         }
                         //*ost << "\n";
-                        if (flag_accepted) {//flag_accepted) {
+                        if (verbose && (rr->covered() || rr->polymorphic())) {//flag_accepted) {//flag_accepted) {
                             cerr << headers[0]->target_name[rr->chromosome()] << "\t" << rr->start() << "\t" << rr->stop();
                             cerr << "\t" << cov_min << "\t" << rr->covered() << "\t" << rr->polymorphic();
                             cerr << vstr.str() << flush << "\n";
@@ -743,7 +755,13 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
                     for (int i = 0; i < num_files; i++) {
                         total_reads += detectors[i]->size();
                     }
-                    cerr << "change chromosome to " << headers[0]->target_name[next_chromosome] << ", sweep " << total_reads << "reads from " << position << "\r";
+                    if (next_chromosome < 0 || next_chromosome >= headers[0]->n_targets) {
+                        finished = true;
+                    } else {
+                        if (use_preset == false) {
+                            cerr << "change chromosome to " << headers[0]->target_name[next_chromosome] << ", sweep " << total_reads << "reads from " << position << "\r";
+                        }
+                    }
                 }
                 if (!finished) {
                     for (int i = 0; i < num_files; i++) {
@@ -759,6 +777,12 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
                     if (pos_min == numeric_limits<int>::max()) {
                         pos_min = 0;
                     }
+		    for (int i = 0; i < (int)preset_regions.size(); i++) {
+		      repeat_region* rr = preset_regions[i];
+		      if (rr->chromosome() == current_chromosome) {
+			*ost << headers[0]->target_name[rr->chromosome()] << "\t" << rr->start() << "\t" << rr->stop() << "\t" << rr->covered() << "\t" << rr->polymorphic() << endl;
+		      }
+		    }
                     current_chromosome = next_chromosome;
                     next_chromosome = -1;
                     position = pos_min;
@@ -790,7 +814,7 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
         if (use_preset) {
             for (int i = 0; i < (int)preset_regions.size(); i++) {
                 repeat_region* rr = preset_regions[i];
-                *ost << headers[0]->target_name[rr->chromosome()] << "\t" << rr->start() << "\t" << rr->stop() << "\t" << rr->covered() << "\t" << rr->polymorphic() << endl;
+                //*ost << headers[0]->target_name[rr->chromosome()] << "\t" << rr->start() << "\t" << rr->stop() << "\t" << rr->covered() << "\t" << rr->polymorphic() << endl;
                 delete rr;
             }
         }
@@ -939,13 +963,30 @@ bool repeat_region::compare_position(const repeat_region* lhs, const repeat_regi
 }
 
 void repeat_region::enumerate_repeat_regions(int argc, char** argv) throw (exception) {
-    ifstream fi("/Data/mm10/mm10.fa");
-    //int position = 0;
+    const char* filename_genome = get_argument_string(argc, argv, "i", NULL);
+    const char* filename_output = get_argument_string(argc, argv, "o", NULL);
+    int str_span = get_argument_integer(argc, argv, "s", 18);
+    int unit_min = get_argument_integer(argc, argv, "m", 2);
+    int unit_max = get_argument_integer(argc, argv, "M", 6);
+    bool verbose = has_option(argc, argv, "verbose");
     string chromosome;
+
+    if (verbose) {
+        cerr << "genome : " << filename_genome << endl;
+        cerr << "span : " << str_span << endl;
+        cerr << "unit : " << unit_min << ", " << unit_max << endl;
+        cerr << "output : " << (filename_output != NULL ? filename_output : "stdout") << endl;
+    }
     //int start = 0;
-    int str_span = 18;
-    int unit_min = 2;
-    int unit_max = 6;
+    // int str_span = 18;
+    // int unit_min = 2;
+    // int unit_max = 6;
+    if (filename_genome == NULL || tktools::io::file_exists(filename_genome) == false) {
+        throw invalid_argument(string("cannot find ") + filename_genome);
+    }
+    ifstream fi(filename_genome);//"/Data/mm10/mm10.fa");
+    //int position = 0;
+
     //int margin_size = str_span * 2;
     int buffer_size = 4096;
     char* buffer = new char[buffer_size + unit_max];
@@ -956,6 +997,13 @@ void repeat_region::enumerate_repeat_regions(int argc, char** argv) throw (excep
     int bpos = 0;
     int spos = 0;
     ostream* ost = &cout;
+    if (filename_output != NULL) {
+        ofstream* fo = new ofstream(filename_output);
+        if (fo->is_open() == false) {
+            throw invalid_argument("cannot open output file");
+        }
+        ost = fo;
+    }
     while (!fi.eof()) {
         string line;
         getline(fi, line);
@@ -998,4 +1046,8 @@ void repeat_region::enumerate_repeat_regions(int argc, char** argv) throw (excep
     //     }
     // }
     delete[] buffer;
+    if (filename_output != NULL) {
+        dynamic_cast<ofstream*>(ost)->close();
+        delete ost;
+    }
 }

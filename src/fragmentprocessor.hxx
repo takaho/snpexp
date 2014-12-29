@@ -133,6 +133,21 @@ namespace tkbio {
         virtual string to_string() const;
     };
 
+    class coverratio_counter : public fragment_processor {
+        unsigned long long* _count;
+        int _max_cover;
+        int _gap_tolerance;
+    private:
+        coverratio_counter(const coverratio_counter& rhs);
+        const coverratio_counter& operator = (const coverratio_counter& rhs);
+    public:
+        coverratio_counter(int max_cover=500, int gap_tolerance=100);
+        ~coverratio_counter();
+        virtual void process_fragments(const vector<recfragment*>& fragments,
+                                       chromosome_seq const* chromosome,
+                                       int start, int end, ostream& ost) throw (exception);
+        virtual string to_string() const;
+    };
 }
 
 
