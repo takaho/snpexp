@@ -831,7 +831,10 @@ string strain_estimator::to_string() const {
 coverratio_counter::coverratio_counter(int max_cover, int tolerance) {
     _max_cover = max_cover;
     _gap_tolerance = tolerance;
-    _count = new unsigned long long[max_cover];
+    _count = new unsigned long long[max_cover + 1];
+    for (int i = 0; i <= max_cover; i++) {
+        _count[i] = 0;
+    }
 }
 
 coverratio_counter::~coverratio_counter() {
@@ -850,23 +853,30 @@ void coverratio_counter::process_fragments(const vector<recfragment*>& fragments
                                        chromosome_seq const* chromosome,
                                            int start, int end, ostream& ost) throw (exception) {
     int size = end - start;
+    if (chromosome == NULL) return;
     int* stack = new int[size];
     bool* masked = new bool[size];
     for (int i = 0; i < size; i++) {
         masked[i] = false;
         stack[i] = 0;
     }
-    for (int pos = start; pos < end; pos++) {
-        if (chromosome->get_base_code(pos) == (unsigned char)0xf) {
-            int index = pos - start;
-            masked[index] = true;
-            for (int j = 1; j < _gap_tolerance; j++) {
-                int left = index - j;
-                int right = index + j;
-                if (left >= 0) masked[left] = true;
-                if (right < size) masked[right] = true;
+    if (chromosome != NULL) {
+        if (start < 0) start = 0;
+        if (end >= chromosome->length()) {
+            end = chromosome->length();
+        }
+        for (int pos = start; pos < end; pos++) {
+            if (chromosome->get_base_code(pos) == (unsigned char)0xf) {
+                int index = pos - start;
+                masked[index] = true;
+                for (int j = 1; j < _gap_tolerance; j++) {
+                    int left = index - j;
+                    int right = index + j;
+                    if (left >= 0) masked[left] = true;
+                    if (right < size) masked[right] = true;
+                }
+                pos += _gap_tolerance;
             }
-            pos += _gap_tolerance;
         }
     }
     for (int i = 0; i < (int)fragments.size(); i++) {
@@ -891,7 +901,7 @@ void coverratio_counter::process_fragments(const vector<recfragment*>& fragments
     for (int i = 0; i < end - start; i++) {
         if (masked[i]) continue;
         int n = stack[i];
-        if (n >= _max_cover) { n = _max_cover - 1; }
+        if (n > _max_cover) { n = _max_cover; }
         _count[n]++;
     }
     delete[] stack;
