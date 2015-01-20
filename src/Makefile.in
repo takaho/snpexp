@@ -50,7 +50,7 @@ am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
 am_recrec_OBJECTS = recrec.$(OBJEXT) tktools.$(OBJEXT) gtf.$(OBJEXT) \
 	main.$(OBJEXT) fragmentprocessor.$(OBJEXT) distsnp.$(OBJEXT) \
-	varstr.$(OBJEXT)
+	varstr.$(OBJEXT) indel.$(OBJEXT)
 recrec_OBJECTS = $(am_recrec_OBJECTS)
 recrec_LDADD = $(LDADD)
 am_snpexp_OBJECTS = snpexp.$(OBJEXT) tktools.$(OBJEXT) gtf.$(OBJEXT)
@@ -180,7 +180,7 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 #managevcf_SOURCES = managevcf.cxxtktools.hxx tktools.cxx 
 #varstr_SOURCES = recrec.cxx recrec.hxx tktools.hxx tktools.cxx varstr.hxx varstr.cxx
-recrec_SOURCES = recrec.cxx recrec.hxx tktools.hxx tktools.cxx gtf.hxx gtf.cxx main.cxx fragmentprocessor.hxx fragmentprocessor.cxx distsnp.cxx distsnp.hxx varstr.cxx varstr.hxx
+recrec_SOURCES = recrec.cxx recrec.hxx tktools.hxx tktools.cxx gtf.hxx gtf.cxx main.cxx fragmentprocessor.hxx fragmentprocessor.cxx distsnp.cxx distsnp.hxx varstr.cxx varstr.hxx indel.hxx indel.cxx
 snpexp_SOURCES = snpexp.cxx snpexp.hxx tktools.hxx tktools.cxx gtf.hxx gtf.cxx 
 trimvcf_SOURCES = trimvcf.hxx trimvcf.cxx gtf.hxx gtf.cxx tktools.hxx tktools.cxx seq_gene.hxx seq_gene.cxx
 AM_CXXFLAGS = -O3 -pedantic -Wall -Wno-long-long -m64 -I/usr/local/include
@@ -279,6 +279,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/distsnp.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/fragmentprocessor.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/gtf.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/indel.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/main.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/recrec.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/seq_gene.Po@am__quote@

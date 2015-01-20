@@ -134,5 +134,6 @@ namespace tkbio {
         int count_coverage(int start, int stop) const;
         static int detect_str(int argc, char** argv) throw (exception);
     };
+
 }
 #endif

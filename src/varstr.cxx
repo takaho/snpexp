@@ -251,6 +251,9 @@ string str_variation::to_string() const {
 
 namespace tkbio {
     bool operator == (const str_variation& lhs, const str_variation& rhs) {
+        if (lhs._code != rhs._code) {
+            cerr << lhs.to_string() << "\t" << hex << lhs._code << " ? " << rhs.to_string() << "\t" << rhs._code << dec << endl;
+        }
         return lhs._code == rhs._code;
     }
 }
@@ -337,6 +340,7 @@ vector<str_variation> str_collection::get_variations(int coverage, double hetero
             }
         }
         if (!overlap) {
+            //cerr << alleles[i].to_string() << endl;
             unique.push_back(alleles[i]);
         }
     }
@@ -367,21 +371,21 @@ vector<str_variation> str_collection::get_variations(int coverage, double hetero
             const bamread& br = _reads[j];
             if (!br.covers(start, stop)) continue;
             if (br.shares_variation(info)) {
-                num_identical++;
+                num_identical++; // shares the same allele
             } else if (br.has_reference_at(start, stop)) {
-                num_reference++;
+                num_reference++; // not shares the allele
             } else {
-                num_others++;
+                num_others++; // has different alleles
             }
         }
         int total = num_identical + num_reference + num_others;
         int minimum = (int)(total * lower + .5f);
         int maximum = (int)(total * upper + .5f);
-        //cout << allele.to_string() << "\t" << num_identical << "," << num_reference << "," << num_others << endl;
+        cout << allele.to_string() << "\t" << num_identical << "," << num_reference << "," << num_others << endl;
         if (total >= coverage && minimum <= num_identical && num_identical <= maximum) {
             allele.set_counts(num_identical, num_reference, num_others);
             counted.push_back(allele);
-            //cout << allele.to_string() << endl;
+            cout << allele.to_string() << endl;
         }
     }
     return counted;
@@ -579,7 +583,6 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
             }
                
             for (int i = 0; i < num_files; i++) {
-                //cerr << i << endl;
                 for (;;) {
                     if (bam_read1(bamfiles[i], reads[i]) > 0) {
                         bam1_t const* r = reads[i];
@@ -691,9 +694,10 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
                             //rr->set_accepted(true);
                         }
                     }
-                } else {
+                } else { // without template
                     for (int i = 0; i < num_files; i++) {
                         vector<str_variation>& vi = detected[i];
+                        cerr << i << ":" << vi.size() << endl;
                         for (int k = 0; k < (int)vi.size(); k++) {
                             str_variation& ak = vi[k];
                             int c = ak.coverage();
@@ -702,17 +706,19 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
                                 continue;
                             }
                             // if (debug) {
-                            //     cerr << "test " << i << "," << k << ":" << ak.to_string() << "\t";
+                            cerr << "test " << i << "," << k << ":" << ak.to_string() << "\t" << endl;
                             // }
                             bool flag_shared = false;
+                            cerr << num_files << endl;
                             for (int j = 0; j < num_files; j++) {
+                                cerr << "i=" << i << ", j=" << j << endl;
                                 if (i == j) continue;
                                 vector<str_variation>& vj = detected[j];
                                 for (int l = 0; l < (int)vj.size(); l++) {
                                     if (ak == vj[l]) {
-                                        // if (debug) {
-                                        //     cerr << " rejected by " << j << "," << l << ":" << vj[l].to_string() << endl;
-                                        // }
+                                        //if (debug) {
+                                        cerr << " rejected by " << j << "," << l << ":" << vj[l].to_string() << endl;
+                                        //}
                                         flag_shared = true;
                                         ak.set_counts(0,0,0);
                                         vj[l].set_counts(0,0,0);
@@ -720,7 +726,7 @@ int str_collection::detect_str(int argc, char** argv) throw (exception) {
                                     }
                                 }
                                 if (flag_shared) {
-                                    //cerr << " accepted   \n";
+                                    cerr << ak.to_string() << " was accepted   \n";
                                     break;
                                 }
                             }
@@ -1051,3 +1057,5 @@ void repeat_region::enumerate_repeat_regions(int argc, char** argv) throw (excep
         delete ost;
     }
 }
+
+

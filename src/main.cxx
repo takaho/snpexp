@@ -33,6 +33,7 @@ using std::set;
 #include <fragmentprocessor.hxx>
 #include <distsnp.hxx>
 #include <varstr.hxx>
+#include <indel.hxx>
 
 using namespace tkbio;
 
@@ -218,7 +219,8 @@ int main(int argc, char** argv) {
 
         if (mode == 4) {
             try {
-                str_collection::detect_str(argc, argv);
+                //str_collection::detect_str(argc, argv);
+                indel::detect_indel_polymorphism(argc, argv);
                 return 0;
             } catch (exception& e) {
                 throw;
