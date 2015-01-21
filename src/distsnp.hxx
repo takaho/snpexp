@@ -93,6 +93,7 @@ namespace tkbio {
     public:
         dbsnp_file(const char* filename, const vector<string>& strains);
         ~dbsnp_file();
+      void remove_strains() { _strains.erase(_strains.begin(), _strains.end()); }
         int strain_size() const { return _strains.size(); }
         const string& get_strain(int index) const { return _strains[index]; }
         const string& cached_chromosome() const { return _cache_chromosome; }

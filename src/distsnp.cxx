@@ -1821,25 +1821,96 @@ namespace {
 
     void count_bases_at_snps(char const* chromosome, int position,
                              int const* const* buffer, int start, int stop,
-                             dbsnp_file const* dbsnp, ostream& ost) {
-        vector<dbsnp_locus const*> snps = dbsnp->get_snps(chromosome, position + start, position + stop);
-        if (snps.size() <= 0) {
-            return;
-        }
-        for (int i = 0; i < (int)snps.size(); i++) {
-            int pos = (int)snps[i]->position() - position;
-            if (start <= pos && pos < stop) {
-                ost << chromosome << "\t" << snps[i]->position() << "\t" 
-                    << snps[i]->rsid() << "\t" << snps[i]->reference()
-                    << "\t" << snps[i]->alternative();
-                for (int j = 0; j < 4; j++) {
-                    int num = buffer[j][pos];
-                    ost << "\t" << num;
-                }
-                ost << "\n";
-            }
-        }
+                             vector<dbsnp_locus*>& snppositions, ostream& ost) {
+      vector<dbsnp_locus*> snps;
+      {
+	int left = 0;
+	int right = (int)snppositions.size();
+	while (left < right) {
+	  int center = (left + right) / 2;
+	  //cerr << left << "-" << right << " / " << snppositions.size() << endl;
+	  int p_ = (int)snppositions[center]->position() - position;
+	  //cerr << start << ", " << p_ << ", " << stop << endl;
+	  if (p_ < start) {
+	    left = center + 1;
+	  } else if (p_ > stop) {
+	    right = center;
+	  } else {
+	    int first = 0;
+	    int index = center;
+	    for (int i = index; i >= 0; i--) {
+	      if ((int)snppositions[i]->position() - position < start) {
+		first = i + 1; 
+		break;
+	      }
+	    }
+	    int last = (int)snppositions.size();
+	    for (int i = index + 1; i < (int)snppositions.size(); i++) {
+	      if ((int)snppositions[i]->position() - position > stop) {
+		last = i;
+		break;
+	      }
+	    }
+	    for (int i = first; i < last; i++) {
+	      snps.push_back(snppositions[i]);
+	    }
+	    break;
+	  }
+	}
+      }
+
+      if (snps.size() <= 0) return;
+      
+      for (int i = 0; i < (int)snps.size(); i++) {
+	int pos = (int)snps[i]->position() - position;
+	//cerr << position << "\t" << pos << endl;
+	if (start <= pos && pos < stop) {
+	  ost << chromosome << "\t" << snps[i]->position() << "\t" 
+	      << snps[i]->rsid() << "\t" << snps[i]->reference()
+	      << "\t" << snps[i]->alternative();
+	  for (int j = 0; j < 4; j++) {
+	    int num = buffer[j][pos];
+	    ost << "\t" << num;
+	  }
+	  ost << "\n";
+	}
+      }
     }
+
+  map<int,vector<dbsnp_locus*> > load_snp_positions(char const* filename, bam_header_t* header) {
+    ifstream fi(filename);
+    if (fi.is_open() == false) {
+      throw runtime_error("cannot open SNP file");
+    }
+    map<string,int> n2h;
+    map<int,vector<dbsnp_locus*> > snps;
+    for (int i = 0; i < header->n_targets; i++) {
+      n2h[header->target_name[i]] = i;
+      if (string(header->target_name[i]).find("chr") == 0) {
+	n2h[string(header->target_name[i]).substr(3)] = i;
+      }
+      //cerr << header->target_name[i] << "=>" << i << endl;
+      vector<dbsnp_locus*> v_;
+      snps[i] = v_;
+    }
+    //int num = 0;
+    //cerr << filename << endl;
+    while (fi.eof() == false) {
+      string line;
+      getline(fi, line);
+      if (line.c_str()[0] == '#') continue;
+      vector<string> items = split_items(line, '\t');
+      //cerr << line << ":" << items.size() << endl;
+      if (items.size() >= 5) {
+	map<string,int>::iterator it = n2h.find(items[0]);
+	if (it == n2h.end()) continue;
+	//cerr << ++num << " " << items[2] << "     \r";
+	snps[it->second].push_back(new dbsnp_locus(atoi(items[1].c_str()), items[2], items[3], items[4]));
+      }
+    }
+    fi.close();
+    return snps;
+  }
 }
 
 void denovo_snp::detect_heterozygous(int argc, char** argv) throw (exception) {
@@ -1868,11 +1939,14 @@ void denovo_snp::detect_heterozygous(int argc, char** argv) throw (exception) {
             cerr << "quality    : " << quality << endl;
         }
 
-        dbsnp_file* dbsnp = NULL;
-
-        if (filename_snps != NULL) {
-            dbsnp_file::load_dbsnp(filename_snps);
-        }
+	map<int,vector<dbsnp_locus*> > given_snps;
+	
+//         dbsnp_file* dbsnp = NULL;
+//         if (filename_snps != NULL) {
+// 	  if (verbose) cerr << "loading snps\n";
+// 	  dbsnp = dbsnp_file::load_dbsnp(filename_snps);
+// 	  dbsnp->remove_strains();
+//         }
 
         int** buffer = new int*[4];
         for (int i = 0; i < 4; i++) {
@@ -1889,10 +1963,10 @@ void denovo_snp::detect_heterozygous(int argc, char** argv) throw (exception) {
             ost = fo;
         }
 
+	//cerr << "prepare BAM\n";
         bamFile bamfile;
         bam_header_t* header = NULL;// = new bam_header_t*[num_files];
         bam1_t* read = bam_init1();// = new bam1_t*[num_files];
-
         bamfile = bam_open(filename, "rb");
         header = bam_header_read(bamfile);
         int current_chrm = -1;
@@ -1900,6 +1974,11 @@ void denovo_snp::detect_heterozygous(int argc, char** argv) throw (exception) {
         int next_position = current_position + chunk_size;
         size_t num = 0;
         //cerr << "parsing\n";
+	if (filename_snps != NULL) {
+	  given_snps = load_snp_positions(filename_snps, header);
+	}
+
+
         while (bam_read1(bamfile, read) > 0) {
             //cerr << "loop\n";
             if (verbose && ++num % 1000000 == 0 && current_chrm >= 0) {
@@ -1909,17 +1988,19 @@ void denovo_snp::detect_heterozygous(int argc, char** argv) throw (exception) {
             int pos = read->core.pos;
             //cerr << chrm << ":" << pos << endl;
             // check range
-            if (chrm != current_chrm || pos > current_position + chunk_size) { // change chromosome
-                if (dbsnp != NULL) {
-                    count_bases_at_snps(header->target_name[current_chrm], 
-                                        current_position,
-                                        buffer, 0, chunk_size - margin_size, 
-                                        dbsnp, *ost);
+            if (chrm != current_chrm || pos > next_position) {
+	      if (current_chrm >= 0) {
+		if (filename_snps != NULL) {
+		  count_bases_at_snps(header->target_name[current_chrm], 
+				      current_position,
+				      buffer, 0, chunk_size - margin_size, 
+				      given_snps[current_chrm], *ost);
                 } else {
-                    output_snps(header->target_name[current_chrm], current_position, 
-                                buffer, 0, chunk_size, coverage, heterozygosity, *ost);
+		  output_snps(header->target_name[current_chrm], current_position, 
+			      buffer, 0, chunk_size, coverage, heterozygosity, *ost);
                 }
-                // for (int i = 0; i < chunk_size; i++) {
+	      }
+	      // for (int i = 0; i < chunk_size; i++) {
                 //     snpallele* al = snpallele::detect(buffer[0][i], buffer[1][i], buffer[2][i], buffer[3][i], coverage, heterozygosity);
                 //     if (al != NULL) {
                 //         *ost << header->target_name[current_chrm] << "\t"
@@ -1936,12 +2017,13 @@ void denovo_snp::detect_heterozygous(int argc, char** argv) throw (exception) {
                         buffer[i][j] = 0;
                     }
                 }
-            } else if (pos > next_position) { // slide window
-                if (dbsnp != NULL) {
+            } else if (pos > next_position - margin_size) { // slide window
+	      //cerr << "patial\n";
+		if (filename_snps != NULL) {
                     count_bases_at_snps(header->target_name[current_chrm], 
                                         current_position,
                                         buffer, 0, chunk_size - margin_size, 
-                                        dbsnp, *ost);
+                                        given_snps[current_chrm], *ost);
                 } else {
                     output_snps(header->target_name[current_chrm], current_position, 
                                 buffer, 0, chunk_size - margin_size, 
@@ -1968,7 +2050,6 @@ void denovo_snp::detect_heterozygous(int argc, char** argv) throw (exception) {
             // put read
             snpallele::put_read(read, buffer, current_position, chunk_size, quality);
         }
-        cerr << "exit\n";
         
         if (filename_output != NULL) {
             dynamic_cast<ofstream*>(ost)->close();
@@ -1982,7 +2063,13 @@ void denovo_snp::detect_heterozygous(int argc, char** argv) throw (exception) {
         bam_close(bamfile);
         for (int i = 0; i < 4; i++) delete[] buffer[i];
         delete[] buffer;
-        delete dbsnp;
+	for (map<int,vector<dbsnp_locus*> >::iterator it = given_snps.begin();
+	     it != given_snps.end(); it++) {
+	  for (vector<dbsnp_locus*>::iterator iv = it->second.begin();
+	       iv != it->second.end(); iv++) {
+	    delete *iv;
+	  }
+	}
         
     } catch (exception& e) {
         cerr << e.what();
