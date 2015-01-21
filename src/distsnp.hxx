@@ -65,7 +65,7 @@ namespace tkbio {
         friend class dbsnp_file;
         const string& reference() const { return _reference; }
         const string& alternative() const { return _alternative; }
-      const string& rsid() const { return _rsid; }
+        const string& rsid() const { return _rsid; }
         size_t position() const { return _position; }
         string to_string() const;
         string to_string(const string& chromosome) const;
