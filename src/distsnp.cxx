@@ -1671,6 +1671,259 @@ namespace {
     }
 }
 
+namespace {
+    class snpallele {
+    public:
+        char major_base;
+        char minor_base;
+        int major_count;
+        int minor_count;
+        snpallele(char major_base, int major_count, char minor_base, int minor_count);
+        float heterozygosity() const;
+        string to_string() const;
+        static snpallele* detect(int a, int c, int g, int t, int coverage=25, float heterozygosity=0.25);
+        static void put_read(bam1_t* read, int** buffer, int position, int size, int quality=0);
+    };
+
+    void snpallele::put_read(bam1_t* read, int** buffer, int position, int size, int quality) {
+        int len = read->core.n_cigar;
+        int spos = read->core.pos + 1;
+        int fpos = 0;
+        uint32_t const* cigar = bam1_cigar(read);
+        uint8_t const* sequence = bam1_seq(read);
+        uint8_t* qptr = bam1_qual(read);
+        int offset = 4;
+        for (int i = 0; i < len; i++) {
+            int op = bam_cigar_op(cigar[i]);
+            int slen = bam_cigar_oplen(cigar[i]);
+            if (op == BAM_CMATCH || op == BAM_CDIFF || op == BAM_CEQUAL) { // M
+                for (int j = 0; j < slen; j++) {
+                    uint8_t base = (sequence[fpos >> 1] >> offset) & 15;
+                    unsigned char qual = qptr[fpos];
+                    offset = 4 - offset;
+                    int index;
+                    if (qual >= quality) {
+                        switch (base) {
+                        case (uint8_t)1:
+                            index = 0; break;
+                        case (uint8_t)2:
+                            index = 1; break;
+                        case (uint8_t)4:
+                            index = 2; break;
+                        case (uint8_t)8:
+                            index = 3; break;
+                        default:
+                            index = -1;
+                        }
+                        if (index >= 0 && spos >= position && spos < position + size) {
+                            //cerr << index << ":" << (spos - position) << ":" << buffer[index][spos - position] << endl;
+                            buffer[index][spos - position]++;
+                        }
+                    }
+                    spos++;
+                    fpos++;
+                }
+            } else if (op == BAM_CINS) { // I
+                fpos += slen;
+                if ((slen & 1) != 0) {
+                    offset = 4 - offset;
+                }
+            } else if (op == BAM_CDEL) { // D
+                spos += slen;
+            }  else {
+                break;
+            }
+        }
+    }
+
+    snpallele::snpallele(char major_base, int major_count, char minor_base, int minor_count) {
+        this->major_base  = major_base ;
+        this->minor_base  = minor_base ;
+        this->major_count = major_count;
+        this->minor_count = minor_count;
+    }
+
+    string snpallele::to_string() const {
+        stringstream ss;
+        ss << major_base << ":" << major_count << "\t" << minor_base << ":" << minor_count;
+        return ss.str();
+    }
+    
+    float snpallele::heterozygosity() const {
+        return (float)major_count / (minor_count + major_count);
+    }
+
+    snpallele* snpallele::detect(int a, int c, int g, int t, int coverage, float heterozygosity) {
+        int cov = a + c + g + t;
+        if (coverage > cov) return NULL;
+        int nonzero = (int)(a > 0) + (int)(c > 0) + (int)(g > 0) + (int)(t > 0);
+        if (nonzero != 2) {
+            return NULL;
+        }
+        char major_base;
+        char minor_base;
+        int major_count;
+        int minor_count;
+        if (a > 0) {
+            major_base = 'A';
+            major_count = a;
+            if (c > 0) { // AC
+                minor_base = 'C';
+                minor_count = c;
+            } else if (g > 0) { // AG
+                minor_base = 'G';
+                minor_count = g;
+            } else { // AT
+                minor_base = 'T';
+                minor_count = t;
+            }
+        } else if (c > 0) {
+            major_base = 'C';
+            major_count = c;
+            if (g > 0) { // CG
+                minor_base = 'G';
+                minor_count = g;
+            } else { // CTif (t > 0) { // CT
+                minor_base = 'T';
+                minor_count = t;
+            }
+        } else { // GT
+            major_base = 'G';
+            major_count = g;
+            minor_base = 'T';
+            minor_count = t;
+        }
+        float h = (float)major_count / (minor_count + major_count);
+        if (heterozygosity <= h && h <= 1.0 - heterozygosity) {
+            if (minor_count > major_count) {
+                return new snpallele(minor_base, minor_count, major_base, major_count);
+            } else {
+                return new snpallele(major_base, major_count, minor_base, minor_count);
+            }
+        } else {
+            return NULL;
+        }
+    }
+}
+
+void denovo_snp::detect_heterozygous(int argc, char** argv) throw (exception) {
+    try {
+        const char* filename = get_argument_string(argc, argv, "i", "/mnt/smb/tae/stap/shira/BAM6/Sample6.bam");
+        const char* filename_output = get_argument_string(argc, argv, "o", NULL);
+        int coverage = get_argument_integer(argc, argv, "c", 20);
+        float heterozygosity = (float)get_argument_float(argc, argv, "z", 0.33);
+        int chunk_size = get_argument_integer(argc, argv, "w",  5000);
+        int margin_size = get_argument_integer(argc, argv, "m", 1000);
+        int quality = get_argument_integer(argc, argv, "q", 10);
+        bool verbose = has_option(argc, argv, "verbose");
+        //int num_files = 2;
+
+        if (verbose) {
+            cerr << "input      : " << filename << endl;
+            cerr << "output     : " << (filename_output == NULL ? "stdout" : filename_output) << endl;
+            cerr << "chunk size : " << chunk_size << endl;
+            cerr << "margin     : " << margin_size << endl;
+            cerr << "heterozygosity : " << heterozygosity << endl;
+            cerr << "coverage : " << coverage << endl;
+            cerr << "quality    : " << quality << endl;
+        }
+
+        int** buffer = new int*[4];
+        for (int i = 0; i < 4; i++) {
+            buffer[i] = new int[chunk_size];
+            for (int j = 0; j < chunk_size; j++) buffer[i][j] = 0;
+        }
+
+        ostream* ost = &cout;
+        if (filename_output != NULL) {
+            ofstream* fo = new ofstream(filename_output);
+            if (fo->is_open() == false) {
+                throw invalid_argument("cannot open output file");
+            }
+            ost = fo;
+        }
+
+        bamFile bamfile;
+        bam_header_t* header = NULL;// = new bam_header_t*[num_files];
+        bam1_t* read = bam_init1();// = new bam1_t*[num_files];
+
+        bamfile = bam_open(filename, "rb");
+        header = bam_header_read(bamfile);
+        int current_chrm = -1;
+        int current_position = 0;
+        int next_position = current_position + chunk_size;
+        size_t num = 0;
+        //cerr << "parsing\n";
+        while (bam_read1(bamfile, read) > 0) {
+            //cerr << "loop\n";
+            if (verbose && ++num % 1000000 == 0 && current_chrm >= 0) {
+                cerr << (num / 1000000) << "M " << header->target_name[current_chrm] << ":" << current_position << "-" << next_position << "         \r";
+            }
+            int chrm = read->core.tid;
+            int pos = read->core.pos;
+            //cerr << chrm << ":" << pos << endl;
+            // check range
+            if (chrm != current_chrm || pos > current_position + chunk_size) { // change chromosome
+                for (int i = 0; i < chunk_size; i++) {
+                    snpallele* al = snpallele::detect(buffer[0][i], buffer[1][i], buffer[2][i], buffer[3][i], coverage, heterozygosity);
+                    if (al != NULL) {
+                        *ost << header->target_name[current_chrm] << "\t"
+                             << (current_position + i) << "\t" << al->to_string()
+                             << endl;
+                        delete al;
+                    } 
+                }
+                current_chrm = chrm;
+                current_position = pos;
+                next_position = pos + chunk_size;
+                for (int i = 0; i < 4; i++) {
+                    for (int j = 0; j < chunk_size; j++) {
+                        buffer[i][j] = 0;
+                    }
+                }
+            } else if (pos > next_position) { // slide window
+                for (int i = 0; i < chunk_size - margin_size; i++) {
+                    snpallele* al = snpallele::detect(buffer[0][i], buffer[1][i], buffer[2][i], buffer[3][i], coverage, heterozygosity);
+                    if (al != NULL) {
+                        *ost << header->target_name[current_chrm] << "\t"
+                             << (current_position + i) << "\t" << al->to_string()
+                             << endl;
+                        delete al;
+                    } 
+                }
+                current_position += chunk_size - margin_size;
+                next_position = current_position + chunk_size;
+                for (int i = 0; i < 4; i++) {
+                    memmove(buffer[i], buffer[i] + chunk_size - margin_size, margin_size * sizeof(int));
+                    for (int j = margin_size; j < chunk_size; j++) {
+                        buffer[i][j] = 0;
+                    }
+                }
+            }
+            // put read
+            snpallele::put_read(read, buffer, current_position, chunk_size, quality);
+        }
+        cerr << "exit\n";
+        
+        if (filename_output != NULL) {
+            dynamic_cast<ofstream*>(ost)->close();
+            delete ost;
+            ost = &cout;
+        }
+        if (read != NULL) {
+            bam_destroy1(read);
+        }
+        bam_header_destroy(header);
+        bam_close(bamfile);
+        for (int i = 0; i < 4; i++) delete[] buffer[i];
+        delete[] buffer;
+        
+    } catch (exception& e) {
+        cerr << e.what();
+        throw;
+    }
+}
+
 void denovo_snp::enumerate_hetero(int argc, char** argv) throw (exception) {
     try {
         const char* filename1 = get_argument_string(argc, argv, "1", "/mnt/smb/tae/stap/shira/BAM6/Sample6.bam");

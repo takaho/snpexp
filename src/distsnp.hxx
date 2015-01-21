@@ -206,6 +206,7 @@ namespace tkbio {
         //void clear();
         std::string to_string() const;
         static void enumerate_hetero(int argc, char** argv) throw (exception);
+        static void detect_heterozygous(int argc, char** argv) throw (exception);
     };
 }
 

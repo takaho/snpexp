@@ -204,10 +204,20 @@ int main(int argc, char** argv) {
             mode = 5;
         } else if (command == "cover") {
             mode = 6;
+        } else if (command == "hetero") {
+            mode = 7;
         } else {
             throw invalid_argument("mode not defined");
         }
 
+        if (mode == 7) {
+            try {
+                denovo_snp::detect_heterozygous(argc, argv);
+                return 0;
+            } catch (exception& e) {
+                throw;
+            }
+        }
         if (mode == 5) {
             try {
                 denovo_snp::enumerate_hetero(argc, argv);
