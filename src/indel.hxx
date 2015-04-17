@@ -47,6 +47,7 @@ namespace tkbio {
 
         static vector<indel> parse_indel(bam1_t const* read, int quality=0);
         static int detect_indel_polymorphism(int argc, char** argv) throw (exception);
+        static int detect_multiple_polymorphism(int argc, char** argv) throw (exception);
         friend bool operator == (const indel& lhs, const indel& rhs);
     };
 }    

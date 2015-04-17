@@ -8,6 +8,10 @@
 #include <fstream>
 #include <set>
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #ifndef HAVE_BAM_H
 #error You do not have bam library
 #endif
@@ -206,8 +210,19 @@ int main(int argc, char** argv) {
             mode = 6;
         } else if (command == "hetero") {
             mode = 7;
+        } else if (command == "triple") {
+            mode = 8;
         } else {
             throw invalid_argument("mode not defined");
+        }
+
+        if (mode == 8) {
+            try {
+                indel::detect_multiple_polymorphism(argc, argv);
+                return 0;
+            } catch (exception& e) {
+                throw;
+            }
         }
 
         if (mode == 7) {

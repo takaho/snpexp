@@ -1,5 +1,9 @@
 #ifndef TKBIO_VARSTR_H
 #define TKBIO_VARSTR_H
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <string>
 #include <stdexcept>
 #include <vector>
@@ -12,6 +16,7 @@ using std::exception;
 #include <bam.h>
 
 #include <recrec.hxx>
+
 
 using namespace tkbio;
 

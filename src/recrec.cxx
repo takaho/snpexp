@@ -8,6 +8,12 @@
 #include <fstream>
 #include <set>
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#else
+#error You do not have config.h
+#endif
+
 #ifndef HAVE_BAM_H
 #error You do not have bam library
 #endif

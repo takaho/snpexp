@@ -174,6 +174,57 @@ namespace {
     // }
 }
 
+int indel::detect_multiple_polymorphism(int argc, char** argv) throw (exception) {
+    const char* filename1 = get_argument_string(argc, argv, "i", "/mnt/smb/tae/stap/shira/BAM6/Sample6.bam");
+    const char* filename_output = get_argument_string(argc, argv, "o", NULL);
+    int coverage = get_argument_integer(argc, argv, "c", 20);
+    bool verbose = has_option(argc, argv, "verbose");
+    int chunk_size = get_argument_integer(argc, argv, "w", 3000);
+    int margin_size = get_argument_integer(argc, argv, "m", 500);
+    if (verbose) {
+        cerr << "filename   : " << filename1 << endl;
+        cerr << "coverage   : " << coverage << endl;
+        cerr << "chunk size : " << chunk_size << endl;
+        cerr << "margin     : " << margin_size << endl;
+        //cerr << "max reads  : " << maximum_reads_in_window << endl;
+        cerr << "output     : " << (filename_output == NULL ? "stdout" : filename_output) << endl;
+        // if (use_preset) {
+        //     cerr << "preset regions : " << filename_bed << endl;
+        // }
+    }
+    try {
+        ostream* ost = &cout;
+        bamFile bamfile;// = new bamFile[num_files];
+        bam_header_t* header;//s = new bam_header_t*[num_files];
+        bam1_t* read;//s = new bam1_t*[num_files];
+        int num_files = 1;
+        if (filename_output != NULL) {
+            ofstream* fo = new ofstream(filename_output);
+            if (fo->is_open() == false) {
+                throw invalid_argument("cannot open output file");
+            }
+            ost = fo;
+        }
+        bamfile = bam_open(filename1, "rb");
+        header = bam_header_read(bamfile);
+        read = bam_init1();
+        int current_chromosome = -1;
+        int next_chromosome = -1;
+        int position = 0;
+        int next_position = position + chunk_size;
+        int steps = 0;
+        //vector<map<int, indel> > indels;
+        vector<indel> indels;
+        int* cover = new int[num_files];
+        cover = new int[chunk_size];
+        for (int j = 0; j < chunk_size; j++) cover[j] = 0;
+        
+        return 0;
+    } catch (exception& e) {
+        throw;
+    }
+}
+
 int indel::detect_indel_polymorphism(int argc, char** argv) throw (exception) {
     try {
         const char* filename1 = get_argument_string(argc, argv, "1", "/mnt/smb/tae/stap/shira/BAM6/Sample6.bam");

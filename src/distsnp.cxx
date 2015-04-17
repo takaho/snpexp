@@ -10,16 +10,13 @@
 #include <iomanip>
 #include <limits>
 
-#ifndef HAVE_BAM_H
-#error You do not have bam library
-#endif
-#include <bam.h>
-
 //using namespace std;
 #include <recrec.hxx>
 #include <tktools.hxx>
 #include <distsnp.hxx>
 #include <gtf.hxx>
+#include <bam.h>
+
 
 using std::string;
 using std::vector;
@@ -92,6 +89,10 @@ dbsnp_locus::~dbsnp_locus() {
 unsigned char dbsnp_locus::get_genotype(int strain_index) const {
     return _strains[strain_index];
 }
+
+const unsigned char dbsnp_locus::NO_INORMATION = (unsigned char)0;
+const unsigned char dbsnp_locus::REFERENCE_ALLELE = (unsigned char)1;
+const unsigned char dbsnp_locus::REFERENCE_ALLELE_HOMO = (unsigned char)17;
 
 void dbsnp_locus::set_genotype(int index, char const* info) {
     if (index < 0 || index > _num_strains) {
@@ -529,6 +530,7 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
     for (;;) {
         string line;
         getline(fi, line);
+        //cerr << line << endl;
         vector<string> items = split_items(line, '\t');
         if (items[0] != cname) break;//chromosome) break;
         if (_strains.size() == 0 || items.size() >= _strains.size() + col_strain) {
@@ -536,6 +538,9 @@ void dbsnp_file::load_snps(const string& chromosome, int start, int end) {
             dbsnp_locus* snp = new dbsnp_locus(pos, items[2], items[3], items[4], _strains.size());
             for (int i = 0; i < (int)_strains.size(); i++) {
                 snp->set_genotype(i, items[i + col_strain].c_str());
+                // if (i == 8) {
+                //     cerr << items[i + col_strain] << " : " << (int)(snp->get_genotype(i)) << endl;
+                // }
             }
             _cache.push_back(snp);
         }
@@ -1807,13 +1812,17 @@ namespace {
 }
 
 namespace {
-    void output_snps(char const* chromosome, int position, int const* const* buffer, int start, int stop, int coverage, float heterozygosity, ostream& ost) throw (runtime_error) {
+    void output_snps(char const* chromosome, int position, int const* const* buffer, int start, int stop, int coverage, float heterozygosity, chromosome_seq* sequence, ostream& ost) throw (runtime_error) {
         for (int i = start; i < stop; i++) {
             snpallele* al = snpallele::detect(buffer[0][i], buffer[1][i], buffer[2][i], buffer[3][i], coverage, heterozygosity);
             if (al != NULL) {
                 ost << chromosome << "\t"
-                    << (position + i) << "\t" << al->to_string()
-                    << endl;
+                    << (position + i) << "\t" << al->to_string();
+                if (sequence != NULL) {
+                    ost << "\t" << sequence->get_base(position + i);
+                }
+                    
+                ost << "\n" << flush;
                 delete al;
             }
         }
@@ -1924,6 +1933,10 @@ void denovo_snp::detect_heterozygous(int argc, char** argv) throw (exception) {
         int margin_size = get_argument_integer(argc, argv, "m", 1000);
         int quality = get_argument_integer(argc, argv, "q", 10);
         bool verbose = has_option(argc, argv, "verbose");
+        const char* filename_genome = get_argument_string(argc, argv, "s", NULL);
+        vector<chromosome_seq*> genome;
+        chromosome_seq* chromosome = NULL;
+
         //int num_files = 2;
 
         if (verbose) {
@@ -1940,6 +1953,9 @@ void denovo_snp::detect_heterozygous(int argc, char** argv) throw (exception) {
         }
 
 	map<int,vector<dbsnp_locus*> > given_snps;
+        if (filename_genome != NULL) {
+            genome = chromosome_seq::load_genome(filename_genome);
+        }
 	
 //         dbsnp_file* dbsnp = NULL;
 //         if (filename_snps != NULL) {
@@ -1997,7 +2013,7 @@ void denovo_snp::detect_heterozygous(int argc, char** argv) throw (exception) {
 				      given_snps[current_chrm], *ost);
                 } else {
 		  output_snps(header->target_name[current_chrm], current_position, 
-			      buffer, 0, chunk_size, coverage, heterozygosity, *ost);
+			      buffer, 0, chunk_size, coverage, heterozygosity, chromosome, *ost);
                 }
 	      }
 	      // for (int i = 0; i < chunk_size; i++) {
@@ -2017,6 +2033,21 @@ void denovo_snp::detect_heterozygous(int argc, char** argv) throw (exception) {
                         buffer[i][j] = 0;
                     }
                 }
+                if (filename_genome != NULL) {
+                    chromosome = NULL;
+                    for (int i = 0; i < (int)genome.size(); i++) {
+                        if (genome[i]->name() == header->target_name[chrm]) {
+                            chromosome = genome[i];
+                            // cerr << chromosome->name() << " : " << chromosome->length() << "bp\n";
+                            // for (int j = 10000000; j < 10000100; j++) {
+                            //     cerr << chromosome->get_base(j);
+                            // }
+                            // cerr << endl;
+                            //cerr << chromosome->to_string() << endl;
+                            break;
+                        }
+                    }
+                }
             } else if (pos > next_position - margin_size) { // slide window
 	      //cerr << "patial\n";
 		if (filename_snps != NULL) {
@@ -2027,7 +2058,7 @@ void denovo_snp::detect_heterozygous(int argc, char** argv) throw (exception) {
                 } else {
                     output_snps(header->target_name[current_chrm], current_position, 
                                 buffer, 0, chunk_size - margin_size, 
-                                coverage, heterozygosity, *ost);
+                                coverage, heterozygosity, chromosome, *ost);
                 }
                 // for (int i = 0; i < chunk_size - margin_size; i++) {
                 //     snpallele* al = snpallele::detect(buffer[0][i], buffer[1][i], buffer[2][i], buffer[3][i], coverage, heterozygosity);
@@ -2055,6 +2086,11 @@ void denovo_snp::detect_heterozygous(int argc, char** argv) throw (exception) {
             dynamic_cast<ofstream*>(ost)->close();
             delete ost;
             ost = &cout;
+        }
+        if (filename_genome != NULL) {
+            for (int i = 0; i < (int)genome.size(); i++) {
+                delete genome[i];
+            }
         }
         if (read != NULL) {
             bam_destroy1(read);

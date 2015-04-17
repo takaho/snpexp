@@ -1,5 +1,12 @@
 #ifndef TKBIO_DISTSNP_HXX
 #define TKBIO_DISTSNP_HXX
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
+#ifdef HAVE_BAM_H
+#include <bam.h>
+#endif
 
 #include <map>
 #include <string>
@@ -11,6 +18,9 @@ using std::invalid_argument;
 using std::runtime_error;
 using std::out_of_range;
 using std::logic_error;
+
+#include <recrec.hxx>
+
 
 namespace tkbio {
     class dbsnp_file;
@@ -57,6 +67,9 @@ namespace tkbio {
         const dbsnp_locus& operator = (const dbsnp_locus& rhs);
         dbsnp_locus(const dbsnp_locus& rhs);
     public:
+        static const unsigned char NO_INORMATION;
+        static const unsigned char REFERENCE_ALLELE;
+        static const unsigned char REFERENCE_ALLELE_HOMO;
         dbsnp_locus(size_t position, const string& reference, const string& alternative);
         dbsnp_locus(size_t position, const string& rsid, const string& reference, const string& alternative, int num_strains=0);
         ~dbsnp_locus();
@@ -93,7 +106,7 @@ namespace tkbio {
     public:
         dbsnp_file(const char* filename, const vector<string>& strains);
         ~dbsnp_file();
-      void remove_strains() { _strains.erase(_strains.begin(), _strains.end()); }
+        void remove_strains() { _strains.erase(_strains.begin(), _strains.end()); }
         int strain_size() const { return _strains.size(); }
         const string& get_strain(int index) const { return _strains[index]; }
         const string& cached_chromosome() const { return _cache_chromosome; }

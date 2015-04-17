@@ -9,11 +9,6 @@
 #include <set>
 #include <limits>
 
-#ifndef HAVE_BAM_H
-#error You do not have bam library
-#endif
-#include <bam.h>
-
 using std::string;
 using std::vector;
 using std::map;
@@ -28,6 +23,8 @@ using std::set;
 using std::numeric_limits;
 using std::vector;
 using std::make_pair;
+
+#include <bam.h>
 
 #include <tktools.hxx>
 #include <gtf.hxx>
